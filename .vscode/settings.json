@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "ssl.h": "c",
+        "err.h": "c",
+        "find.h": "c",
+        "sqlite.h": "c"
+    }
+}
