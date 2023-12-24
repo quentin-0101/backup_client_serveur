@@ -54,10 +54,13 @@ const char *selectLastModificationFromFileByPath(sqlite3 *db, const char *path) 
     return NULL;
 }
 
+
 int insertNewFile(sqlite3 *db, Packet *packet) {
+   
+    sqlite3_exec(db, "BEGIN TRANSACTION", 0, 0, 0);
     const char *insert_sql = "INSERT INTO file (path, lastModification, slug) VALUES (?, ?, ?);";
     sqlite3_stmt *stmt;
-    int rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
+     int rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error preparing INSERT statement: %s\n", sqlite3_errmsg(db));
@@ -98,6 +101,55 @@ int insertNewFile(sqlite3 *db, Packet *packet) {
 
     sqlite3_finalize(stmt);
 
+    sqlite3_exec(db, "COMMIT", 0, 0, 0);
+
+    return rc;
+}
+
+int updateFile(sqlite3 *db, Packet *packet) {
+    printf("update : %s\n", packet->fileInfo.lastModification);
+
+    sqlite3_exec(db, "BEGIN TRANSACTION", 0, 0, 0);
+
+    const char *update_sql = "UPDATE file SET lastModification = ? WHERE path = ?;";
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, update_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing UPDATE statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // Bind values to prepared statement parameters
+    rc = sqlite3_bind_text(stmt, 1, packet->fileInfo.lastModification, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding lastModification parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    rc = sqlite3_bind_text(stmt, 2, packet->fileInfo.path, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    // Execute the UPDATE statement
+    rc = sqlite3_step(stmt);
+
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing UPDATE statement: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    // Finalize the statement before committing the transaction
+    sqlite3_finalize(stmt);
+
+    sqlite3_exec(db, "COMMIT", 0, 0, 0);
+
+    printf("update fin\n");
     return rc;
 }
 
@@ -129,13 +181,16 @@ int selectCountFile(sqlite3 *db){
 
 
 int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
-    int rc;
+
+    sqlite3_exec(db, "BEGIN TRANSACTION", 0, 0, 0);
+
+   
     sqlite3_stmt *stmt;
 
     // Préparer la requête DELETE
     const char *delete_sql = "DELETE FROM file WHERE path = ?";
 
-    rc = sqlite3_prepare_v2(db, delete_sql, -1, &stmt, 0);
+    int rc = sqlite3_prepare_v2(db, delete_sql, -1, &stmt, 0);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Erreur de préparation de la requête DELETE : %s\n", sqlite3_errmsg(db));
         return rc;
@@ -157,6 +212,8 @@ int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
 
     // Finaliser l'instruction
     sqlite3_finalize(stmt);
+
+    sqlite3_exec(db, "COMMIT", 0, 0, 0);
 
     return rc;
 }
@@ -293,11 +350,12 @@ int main(){
     createDatabase(db, rc);
 
     Packet packet;
-    strcpy(packet.fileInfo.path, "abcde");
-    strcpy(packet.fileInfo.lastModification, "abcde");
-    strcpy(packet.fileInfo.slug, "abcde");
+    strcpy(packet.fileInfo.path, "dhcfjgvh");
+    strcpy(packet.fileInfo.lastModification, "dtfcgjvhk");
+    strcpy(packet.fileInfo.slug, "fcjgvhkb;");
 
     insertNewFile(db, &packet);
 
 }
+
 */

@@ -18,9 +18,17 @@
 
 void handle_client(SSL *ssl) {
     // Fonction pour gérer la communication avec le client
-        Packet packet;
-        packet.flag = NEW_CLIENT_HELLO;
-        SSL_write(ssl, &packet, sizeof(packet));
+    Packet packet;
+    packet.flag = NEW_CLIENT_HELLO;
+    SSL_write(ssl, &packet, sizeof(packet));
+
+    sqlite3 *db;
+    int rc = sqlite3_open("/Users/quentingauny/Documents/cours-semestre5/client-server-tls/sqlite/database.db", &db);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+    }
     
 
     while (1) {
@@ -29,13 +37,7 @@ void handle_client(SSL *ssl) {
         Packet packetResponse;
         int bytes_received = SSL_read(ssl, &packetReceive, sizeof(packetReceive));
 
-        sqlite3 *db;
-        int rc = sqlite3_open("/Users/quentingauny/Documents/cours-semestre5/client-server-tls/sqlite/database.db", &db);
-
-        if (rc != SQLITE_OK) {
-            fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
-            sqlite3_close(db);
-        }
+        
         FILE *fichier;
         char slug[1024];
 
@@ -51,6 +53,7 @@ void handle_client(SSL *ssl) {
                 
                 case EXIT:
                     printf("un client vient de se déconnecter\n");
+                    sqlite3_close(db);
                     exit(EXIT_SUCCESS);
                     break;
                 
@@ -67,15 +70,14 @@ void handle_client(SSL *ssl) {
                     if(lastDateUpdate == NULL){
                         packetResponse.flag = REQUEST_FILE;
                         memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
-                        deleteFileWithFilePath(db, packetReceive.fileInfo.path);
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                     } else { // le fichier est connu
+                        sqlite3_busy_timeout(db, 1000); 
                         if(strcmp(lastDateUpdate, packetReceive.fileInfo.lastModification) == 0){ // le fichier est à la même version que la sauvegarde : ne rien faire
                             printf("le fichier est déja sauvegardé à la dernière version\n");
                         } else { // le fichier à changé : il faut le resauvegarder
                             packetResponse.flag = REQUEST_FILE;
                             memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
-                            deleteFileWithFilePath(db, packetReceive.fileInfo.path);
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                         }
                     }
@@ -83,8 +85,8 @@ void handle_client(SSL *ssl) {
 
                 case HEADER_FILE:
                     memcpy(packetReceive.fileInfo.slug, replace(packetReceive.fileInfo.path, '/', '_'), strlen(replace(packetReceive.fileInfo.path, '/', '_')) + 1);
-                    
                     insertNewFile(db, &packetReceive);
+                    updateFile(db, &packetReceive);
                     printf("open file\n");
                     snprintf(slug, sizeof(slug), "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/server_data/%s", packetReceive.fileInfo.slug);
                     fichier = fopen(slug, "wb");
@@ -190,10 +192,10 @@ void handle_client(SSL *ssl) {
             }
         } else {
             ERR_print_errors_fp(stderr);
-            sqlite3_close(db);
+        //    sqlite3_close(db);
             break;
         }
-        sqlite3_close(db);
+        //sqlite3_close(db);
             
        // free(packetReceive);
     }

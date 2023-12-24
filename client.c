@@ -14,6 +14,8 @@
 #include "lib/utils.h"
 #include "libgen.h"
 
+#include <signal.h>
+
 // global variables
 SSL *ssl;
 //Packet *packetReceive = NULL;
@@ -23,6 +25,16 @@ char mod[1024];
 char repository[4096];
 char extensionsFile[4096];
 FILE *fichier;
+
+
+
+void handle_ctrl_c(int signo) {
+    printf("Vous avez appuyé sur Ctrl + C !\n");
+    Packet packet;
+    packet.flag = EXIT;
+    SSL_write(ssl, &packet, sizeof(packet));
+    exit(EXIT_SUCCESS);
+}
 
 void onPacketReceive(Packet packetReceive){
     
@@ -232,6 +244,12 @@ int main(int argc, char *argv[]) {
     strcpy(mod, argv[3]);
     strcpy(repository, argv[4]);
     strcpy(extensionsFile, argv[5]);
+
+    if (signal(SIGINT, handle_ctrl_c) == SIG_ERR) {
+        fprintf(stderr, "Impossible de capturer SIGINT\n");
+        return 1;
+    }
+    
 
     int client_socket;
     struct sockaddr_in server_addr;

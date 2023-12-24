@@ -11,6 +11,7 @@
 int createDatabase(sqlite3 *db, int rc);
 const char *selectLastModificationFromFileByPath(sqlite3 *db, const char *path);
 int insertNewFile(sqlite3 *db, struct Packet *packet);
+int updateFile(sqlite3 *db, Packet *packet);
 int deleteFileWithFilePath(sqlite3 *db, const char *filePath);
 char** selectAllPathFromFile(sqlite3* db, int* rowCount);
 const char* selectSlugByPath(sqlite3* db, const char* path);
