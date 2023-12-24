@@ -101,27 +101,14 @@ int insertNewFile(sqlite3 *db, Packet *packet) {
     return rc;
 }
 
-int selectCountFileExtension(sqlite3 *db, const char* extension){
-    const char *select_sql = "SELECT COUNT(*) FROM file WHERE path LIKE ?;";
-
-    char *extendedExtension = malloc(strlen(extension) + 2);
-    sprintf(extendedExtension, "%%%s", extension);
-
+int selectCountFile(sqlite3 *db){
+    const char *select_sql = "SELECT COUNT(*) FROM file;";
 
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
-        return rc;
-    }
-
-    // Lier le nom comme paramètre de la requête préparée
-    rc = sqlite3_bind_text(stmt, 1, extendedExtension, -1, SQLITE_STATIC);
-
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
         return rc;
     }
 
@@ -137,54 +124,10 @@ int selectCountFileExtension(sqlite3 *db, const char* extension){
 
     sqlite3_finalize(stmt);
 
-    return -1;
+    return NULL;
 }
-/*
-int selectAllPathFromExtension(sqlite3 *db, const char* extension, struct Restore *restore) {
-    char *extendedExtension = malloc(strlen(extension) + 2);
-    sprintf(extendedExtension, "%%%s", extension);
 
-    const char *select_sql = "SELECT path,slug,lastModification FROM file WHERE path LIKE ?;";
 
-    sqlite3_stmt *stmt;
-    int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
-
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
-        return rc;
-    }
-
-    // Lier le nom comme paramètre de la requête préparée
-    rc = sqlite3_bind_text(stmt, 1, extendedExtension, -1, SQLITE_STATIC);
-
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
-        sqlite3_finalize(stmt);
-        return rc;
-    }
-
-    // Exécution de la requête SELECT
-    int i = 0;
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        // Lire les résultats de la requête ici
-        char *resultPath = (const char *)sqlite3_column_text(stmt, 0);
-        char *resultSlug = (const char *)sqlite3_column_text(stmt, 1);
-        char *resultLastModification = (const char *)sqlite3_column_text(stmt, 2);
-        
-        strncpy(restore->restorePath[i].path, resultPath, sizeof(restore->restorePath[i].path));
-        strncpy(restore->restorePath[i].slug, resultSlug, sizeof(restore->restorePath[i].slug));
-        strncpy(restore->restorePath[i].lastModification, resultLastModification, sizeof(restore->restorePath[i].lastModification));
-        i++;
-    }
-
-    if (rc != SQLITE_DONE) {
-        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
-    }
-
-    sqlite3_finalize(stmt);
-    return 0;
-}
-*/
 int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
     int rc;
     sqlite3_stmt *stmt;
@@ -217,6 +160,122 @@ int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
 
     return rc;
 }
+
+char** selectAllPathFromFile(sqlite3* db, int* rowCount) {
+    const char* select_sql = "SELECT path FROM file;";
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
+        return NULL;
+    }
+
+    // Exécution de la requête SELECT
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return NULL;
+    }
+
+    // Allocation dynamique d'un tableau de chaînes de caractères
+    char** paths = NULL;
+    int index = 0;
+    *rowCount = 0;
+
+    while (rc == SQLITE_ROW) {
+        const char* path = (const char*)sqlite3_column_text(stmt, 0);
+
+        // Allocation mémoire pour la nouvelle chaîne de caractères
+        char* newPath = strdup(path);
+
+        // Réallocation du tableau de chaînes de caractères
+        paths = (char**)realloc(paths, (index + 1) * sizeof(char*));
+        paths[index++] = newPath;
+        (*rowCount)++;
+
+        // Passage à la prochaine ligne du résultat
+        rc = sqlite3_step(stmt);
+    }
+
+    // Finalisation
+    sqlite3_finalize(stmt);
+
+    return paths;
+}
+
+const char *selectSlugByPath(sqlite3 *db, const char *path) {
+    const char *select_sql = "SELECT slug FROM file WHERE path = ?;";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
+        exit(EXIT_FAILURE);
+    }
+
+    // Lier le nom comme paramètre de la requête préparée
+    rc = sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        exit(EXIT_FAILURE);
+    }
+
+    // Exécution de la requête SELECT
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const char *slug = (const char *)sqlite3_column_text(stmt, 0);
+        printf("result : %s\n", slug);
+        return slug;
+    }
+
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+        exit(EXIT_FAILURE);
+    }
+
+    sqlite3_finalize(stmt);
+
+    return NULL;
+}
+
+
+int selectAllPath(sqlite3 *db, Restore *restore) {
+    const char *select_sql = "SELECT path,slug,lastModification FROM file;";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // Exécution de la requête SELECT
+    int i = 0;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        // Lire les résultats de la requête ici
+        char *resultPath = (const char *)sqlite3_column_text(stmt, 0);
+        char *resultSlug = (const char *)sqlite3_column_text(stmt, 1);
+        char *resultLastModification = (const char *)sqlite3_column_text(stmt, 2);
+        
+        strncpy(restore->restorePath[i].path, resultPath, sizeof(restore->restorePath[i].path));
+        strncpy(restore->restorePath[i].slug, resultSlug, sizeof(restore->restorePath[i].slug));
+        strncpy(restore->restorePath[i].lastModification, resultLastModification, sizeof(restore->restorePath[i].lastModification));
+        i++;
+    }
+
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    sqlite3_finalize(stmt);
+    return 0;
+}
+
 
 /*
 int main(){

@@ -11,6 +11,8 @@
 
 #include "lib/find.h"
 
+#include "lib/utils.h"
+#include "libgen.h"
 
 // global variables
 SSL *ssl;
@@ -20,6 +22,7 @@ SSL *ssl;
 char mod[1024];
 char repository[4096];
 char extensionsFile[4096];
+FILE *fichier;
 
 void onPacketReceive(Packet packetReceive){
     
@@ -30,38 +33,62 @@ void onPacketReceive(Packet packetReceive){
     int count;
     Packet packetResponse;
     FILE *fichier;
+    
 
 
     switch (packetReceive.flag)
     {
         case NEW_CLIENT_HELLO:
+            if(strcmp(mod, "SYNCHRONIZE") == 0){
+                // Lit les extensions depuis le fichier
+                readExtensionsFromFile(extensionsFile, &extensions, &numExtensions);
+                for(int i = 0; i < numExtensions; i++){
+                    printf("extension : %s\n", extensions[i]);
+                }
+            
+                findFiles(repository, paths, &count);
+                for(int i = 0; i < count; i++){
+                    printf("%s\n", paths[i]);
+                }
 
-            // Lit les extensions depuis le fichier
-            readExtensionsFromFile(extensionsFile, &extensions, &numExtensions);
-            for(int i = 0; i < numExtensions; i++){
-                printf("extension : %s\n", extensions[i]);
-            }
-         
-            findFiles(repository, paths, &count);
-            for(int i = 0; i < count; i++){
-                printf("%s\n", paths[i]);
-            }
-            // Appelle la fonction de recherche
-           // searchFilesRecursive(repository, extensions, numExtensions, &results, &count);
+                // Envois des résultats au serveur
+                for (int i = 0; i < count; i++) {
+                    if(paths[i] != NULL){
+                        printf("envoi : %s\n", paths[i]);
 
-            // Envois des résultats au serveur
-            for (int i = 0; i < count; i++) {
-                if(paths[i] != NULL){
-                    printf("envoi : %s\n", paths[i]);
+                        char *lastModification = getLastUpdated(paths[i]);
+                        packetResponse.flag = FILE_INFO;
+                        memcpy(packetResponse.fileInfo.path, paths[i], strlen(paths[i]) + 1);
+                        memcpy(packetResponse.fileInfo.lastModification, lastModification, strlen(lastModification) + 1);
+                        SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                    }
+                }
+            } else {
+                printf("mode restauration activé : Que voulez-vous faire ?\n");
+                printf("option 1 : restaurer un seul fichier uniquement\n");
+                printf("option 2 : restaurer tous les fichiers manquants et modifiés\n");
 
-                    char *lastModification = getLastUpdated(paths[i]);
-                    packetResponse.flag = FILE_INFO;
-                    memcpy(packetResponse.fileInfo.path, paths[i], strlen(paths[i]) + 1);
-                    memcpy(packetResponse.fileInfo.lastModification, lastModification, strlen(lastModification) + 1);
+                int choix;
+                printf("votre choix : ");
+                scanf("%d", &choix);
+                
+                switch (choix) 
+                {
+                case 1:
+                    // demander au serveur tous les paths sauvegardés
+                    packetResponse.flag = REQUEST_ALL_PATH;
+                    SSL_write(ssl, &packetResponse, sizeof(packetResponse)); // pas fini
+                    break;
+
+                case 2:
+                    packetResponse.flag = REQUEST_RESTORE;            
                     SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                    break;
+                
+                default:
+                    break;
                 }
             }
-
             break;
 
             case REQUEST_FILE:
@@ -91,20 +118,12 @@ void onPacketReceive(Packet packetReceive){
                    // return 1;
                 }
 
-                
-
                 size_t octetsLus;
                 while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
                     for (size_t i = 0; i < octetsLus; i++) {
                         packetResponse.fileContent.content[i] = buffer[i];
                     }
-                    printf("data : %s\n", packetResponse.fileContent.content);
                     packetResponse.flag = CONTENT_FILE;
-
-                    for(int i = 0; i < 2048; i++){
-                        printf("%02X ", packetResponse.fileContent.content[i]);
-                    }
-                    
                     packetResponse.fileContent.size = octetsLus;
                     SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                     memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
@@ -115,12 +134,76 @@ void onPacketReceive(Packet packetReceive){
 
                 packetResponse.flag = FINISH_FILE;
                 SSL_write(ssl, &packetResponse, sizeof(packetResponse));
-                printf("envoi finish\n");
-
-
-
+                printf("envoi fini\n");
 
                 break;
+
+            case RESPONSE_PATH:
+                printf("%s\n", packetReceive.fileInfo.path);
+                break;
+            
+
+            case RESPONSE_PATH_FINISH:
+                printf("RESPONSE_PATH_FINISH received\n");
+                if(1 == 1){
+                    printf("votre choix : ");
+                    fflush(stdin);
+                    fgets(packetResponse.fileInfo.path, sizeof(packetResponse.fileInfo.path), stdin);
+                
+                    
+                    // enlever le caractère \n qui est automatique avec fgets
+                    for(int i = 0; i < strlen(packetResponse.fileInfo.path); i++){
+                        if(packetResponse.fileInfo.path[i] == '\n'){
+                            packetResponse.fileInfo.path[i] = '\0';
+                        }
+                    }
+
+                    printf("choix : %s\n", packetResponse.fileInfo.path);
+
+                    packetResponse.flag = REQUEST_FILE;
+                    SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                    printf("envoi de %s", packetResponse.fileInfo.path);
+                }
+                break;
+            
+            case REQUEST_FILE_RESTORE:
+                printf("packet reçu : %s\n", packetReceive.fileInfo.path);
+                
+                if (access(packetReceive.fileInfo.path, F_OK) != -1) {
+                    char *lastUpdate = getLastUpdated(packetReceive.fileInfo.path);
+                    if(strcmp(lastUpdate, packetReceive.fileInfo.lastModification) == 0){
+                        // le fichier est à jour
+                    } else {
+                        packetReceive.flag = REQUEST_FILE;
+                        SSL_write(ssl, &packetReceive, sizeof(packetReceive));
+                        printf("je demande le fichier : %s\n", packetResponse.fileInfo.path);
+                    }
+                } else {
+                    printf("Le fichier n'existe pas.\n");
+                    packetReceive.flag = REQUEST_FILE;
+                    SSL_write(ssl, &packetReceive, sizeof(packetReceive));
+                }
+                break;
+
+            case HEADER_FILE:
+                remove(packetReceive.fileInfo.path);
+                char command[2048];
+                snprintf(command, sizeof(command), "mkdir -p %s", dirname(packetReceive.fileInfo.path));
+                system(command);
+                fichier = fopen(packetReceive.fileInfo.path, "wb");
+                break;
+            
+            case CONTENT_FILE:
+                // Écrire les données dans le fichier
+                fwrite(packetReceive.fileContent.content, 1, packetReceive.fileContent.size, fichier);
+                break;
+            
+            case FINISH_FILE:
+                fclose(fichier);
+                printf("close file\n");
+                break;
+            
+
             
         default:
             break;
@@ -216,7 +299,6 @@ int main(int argc, char *argv[]) {
             Packet packetReceive;
             int bytes_received = SSL_read(ssl, &packetReceive, sizeof(packetReceive));
             if (bytes_received > 0) {
-                printf("--------- bytes received\n");
                 onPacketReceive(packetReceive);
             } else {
                 ERR_print_errors_fp(stderr);

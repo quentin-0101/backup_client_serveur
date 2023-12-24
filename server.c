@@ -11,7 +11,7 @@
 #include "lib/sqlite.h"
 #include "lib/utils.h"
 
-#define PORT 12346
+#define PORT 12347
 
 
 
@@ -67,35 +67,121 @@ void handle_client(SSL *ssl) {
                     if(lastDateUpdate == NULL){
                         packetResponse.flag = REQUEST_FILE;
                         memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                        deleteFileWithFilePath(db, packetReceive.fileInfo.path);
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                     } else { // le fichier est connu
                         if(strcmp(lastDateUpdate, packetReceive.fileInfo.lastModification) == 0){ // le fichier est à la même version que la sauvegarde : ne rien faire
-
+                            printf("le fichier est déja sauvegardé à la dernière version\n");
                         } else { // le fichier à changé : il faut le resauvegarder
                             packetResponse.flag = REQUEST_FILE;
                             memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                            deleteFileWithFilePath(db, packetReceive.fileInfo.path);
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                         }
                     }
-
                     break;
 
                 case HEADER_FILE:
+                    memcpy(packetReceive.fileInfo.slug, replace(packetReceive.fileInfo.path, '/', '_'), strlen(replace(packetReceive.fileInfo.path, '/', '_')) + 1);
+                    
+                    insertNewFile(db, &packetReceive);
                     printf("open file\n");
-                    snprintf(slug, sizeof(slug), "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/server_data/%s", replace(packetReceive.fileInfo.path, '/', '_'));
+                    snprintf(slug, sizeof(slug), "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/server_data/%s", packetReceive.fileInfo.slug);
                     fichier = fopen(slug, "wb");
                     break;
                 case CONTENT_FILE:
-                //    printf("CONTENT_FILE received\n");
-                    // Afficher ou traiter les données comme nécessaire
-                 //   printf("data received : %s\n", packetReceive.fileContent.content);
-
                     // Écrire les données dans le fichier
                     fwrite(packetReceive.fileContent.content, 1, packetReceive.fileContent.size, fichier);
                     break;
                 case FINISH_FILE:
-                    printf("close file");
                     fclose(fichier);
+                    printf("close file");
+                    break;
+
+
+                case REQUEST_ALL_PATH:
+                    if(1 == 1){
+                        int rowCount = 0;
+                        char **results = selectAllPathFromFile(db, &rowCount);
+                        for(int i = 0; i < rowCount; i++){
+                            packetResponse.flag = RESPONSE_PATH;
+                            memcpy(packetResponse.fileInfo.path, results[i], strlen(results[i]) + 1);
+                            SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                            memset(packetResponse.fileInfo.path, 0, sizeof(packetResponse.fileInfo.path));
+                        }
+                        packetResponse.flag = RESPONSE_PATH_FINISH;
+                        SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                    }
+
+                    break;
+
+                case REQUEST_FILE:  
+                    printf("REQUEST_FILE received\n");
+
+                    // envoi de l'entête
+                    packetResponse.flag = HEADER_FILE;
+                    memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                    SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+
+                    const char *slug = selectSlugByPath(db, packetReceive.fileInfo.path);
+                    memcpy(packetResponse.fileInfo.slug, slug, strlen(slug) + 1);
+                    // envoi du contenu
+
+                    char filePath[1024];
+                    snprintf(filePath, sizeof(filePath), "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/server_data/%s", packetResponse.fileInfo.slug);
+
+                    fichier = fopen(filePath, "rb");
+                    if (fichier == NULL) {
+                        perror("Erreur lors de l'ouverture du fichier");
+                    }
+                    unsigned char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(unsigned char));
+
+                    if (buffer == NULL) {
+                        perror("Erreur d'allocation mémoire");
+                        fclose(fichier);
+                    }
+
+                    size_t octetsLus;
+                    while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
+                        for (size_t i = 0; i < octetsLus; i++) {
+                            packetResponse.fileContent.content[i] = buffer[i];
+                        }
+                        packetResponse.flag = CONTENT_FILE;
+                        packetResponse.fileContent.size = octetsLus;
+                        SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                        memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
+                    }
+
+                    free(buffer); // Libérer la mémoire du tampon
+                    fclose(fichier);
+
+                    // envoi d'un flag pour signaler la fin du fichier
+                    packetResponse.flag = FINISH_FILE;
+                    SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                    printf("envoi fini\n");
+                    break;
+
+                case REQUEST_RESTORE:
+                    if(1 == 1){
+                        int count = selectCountFile(db);
+                        Restore restore;
+                        restore.restorePath = malloc(sizeof(RestorePath) * count);
+                        selectAllPath(db, &restore);
+                        for(int i = 0; i < count; i++){
+                            packetResponse.flag = REQUEST_FILE_RESTORE;
+                            memcpy(packetResponse.fileInfo.path, restore.restorePath[i].path, strlen(restore.restorePath[i].path) + 1);
+                            memcpy(packetResponse.fileInfo.lastModification, restore.restorePath[i].lastModification, strlen(restore.restorePath[i].lastModification) + 1);
+                            SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                            printf("envoi : %s\n", packetResponse.fileInfo.path);
+                        }
+                        free(restore.restorePath);
+                    }
+                    break;
+
+                case FILE_INFO_RESTORE:
+                    break;
+                    
+                case FILE_INFO_RESTORE_FINISH:
                     break;
                 
                 default:
@@ -104,6 +190,7 @@ void handle_client(SSL *ssl) {
             }
         } else {
             ERR_print_errors_fp(stderr);
+            sqlite3_close(db);
             break;
         }
         sqlite3_close(db);
