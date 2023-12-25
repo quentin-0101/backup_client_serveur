@@ -18,6 +18,6 @@ void readExtensionsFromFile(const char *filename, char ***extensions, int *numEx
 void freeExtensions(char **extensions, int numExtensions);
 char *getLastUpdated(const char *nom_fichier);
 
-void findFiles(char *basePath, char **paths, int *numPaths) ;
+void findFiles(char *basePath, char **paths, int *numPaths, char **extensions, int numberExtension) ;
 
 #endif

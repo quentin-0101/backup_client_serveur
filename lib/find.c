@@ -151,7 +151,7 @@ char *getLastUpdated(const char *path) {
 }
 
 
-void findFiles(char *basePath, char **paths, int *numPaths) {
+void findFiles(char *basePath, char **paths, int *numPaths, char **extensions, int numberExtension) {
   char path[1000];
   struct dirent *dp;
   DIR *dir = opendir(basePath);
@@ -170,10 +170,24 @@ void findFiles(char *basePath, char **paths, int *numPaths) {
           if (childDir) {
               // C'est un répertoire, donc nous devons le parcourir récursivement
               closedir(childDir);
-              findFiles(path, paths, numPaths);
+              findFiles(path, paths, numPaths, extensions, numberExtension);
           } else {
               // C'est un fichier, donc nous ajoutons le chemin au tableau de chemins
-              paths[(*numPaths)++] = strdup(path);
+
+                if(numberExtension > 0){
+                    int verification = 0;
+                    for(int i = 0; i < numberExtension; i++){
+                        if (strstr(dp->d_name, extensions[i]) != NULL) {
+                            verification = 1;
+                            break;
+                        }
+                    }
+                    if(verification == 1){
+                        paths[(*numPaths)++] = strdup(path);
+                    }
+                } else {
+                    paths[(*numPaths)++] = strdup(path);
+                }
           }
       }
   }

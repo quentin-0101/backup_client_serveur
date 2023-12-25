@@ -58,8 +58,11 @@ void onPacketReceive(Packet packetReceive){
                     printf("extension : %s\n", extensions[i]);
                 }
             
-                findFiles(repository, paths, &count);
+                findFiles(repository, paths, &count, extensions, numExtensions);
+
+                printf("count : %d\n", count);
                 for(int i = 0; i < count; i++){
+                    printf("ok\n");
                     printf("%s\n", paths[i]);
                 }
 
