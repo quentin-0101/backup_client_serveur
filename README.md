@@ -29,3 +29,5 @@ lancer le client
 build/client IP PORT SYNCHRONIZE|RESTORE path-to-save extensions.conf
 
 ```
+
+postgresql compile macos : gcc postgresql.c -o postgresql -I/opt/homebrew/opt/libpq/include -L/opt/homebrew/opt/libpq/lib -lpq
