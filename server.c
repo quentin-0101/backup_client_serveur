@@ -23,7 +23,7 @@ void handle_client(SSL *ssl) {
     SSL_write(ssl, &packet, sizeof(packet));
 
     sqlite3 *db;
-    int rc = sqlite3_open("/Users/quentingauny/Documents/cours-semestre5/client-server-tls/sqlite/database.db", &db);
+    int rc = sqlite3_open("sqlite/database.db", &db);
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
@@ -88,7 +88,7 @@ void handle_client(SSL *ssl) {
                     insertNewFile(db, &packetReceive);
                     updateFile(db, &packetReceive);
                     printf("open file\n");
-                    snprintf(slug, sizeof(slug), "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/server_data/%s", packetReceive.fileInfo.slug);
+                    snprintf(slug, sizeof(slug), "server_data/%s", packetReceive.fileInfo.slug);
                     fichier = fopen(slug, "wb");
                     break;
                 case CONTENT_FILE:
@@ -130,7 +130,7 @@ void handle_client(SSL *ssl) {
                     // envoi du contenu
 
                     char filePath[1024];
-                    snprintf(filePath, sizeof(filePath), "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/server_data/%s", packetResponse.fileInfo.slug);
+                    snprintf(filePath, sizeof(filePath), "server_data/%s", packetResponse.fileInfo.slug);
 
                     fichier = fopen(filePath, "rb");
                     if (fichier == NULL) {
@@ -208,7 +208,7 @@ void handle_client(SSL *ssl) {
 
 int main() {
     sqlite3 *db;
-    int rc = sqlite3_open("/Users/quentingauny/Documents/cours-semestre5/client-server-tls/sqlite/database.db", &db);
+    int rc = sqlite3_open("sqlite/database.db", &db);
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
@@ -243,8 +243,8 @@ int main() {
     SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2);
 
     // Charger le certificat et la clé privée
-    if (SSL_CTX_use_certificate_file(ctx, "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/certificats/server.crt", SSL_FILETYPE_PEM) <= 0 ||
-        SSL_CTX_use_PrivateKey_file(ctx, "/Users/quentingauny/Documents/cours-semestre5/client-server-tls/certificats/server.key", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, "certificats/server.crt", SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(ctx, "certificats/server.key", SSL_FILETYPE_PEM) <= 0) {
         fprintf(stderr, "Erreur lors du chargement du certificat/clave privée.\n");
         return EXIT_FAILURE;
     }
