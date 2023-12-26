@@ -7,6 +7,7 @@
 #include <openssl/err.h>
 
 #include "objects/packet.h"
+#include "objects/apiPacket.h"
 
 #include "lib/sqlite.h"
 #include "lib/utils.h"
@@ -38,11 +39,6 @@ void handle_client(SSL *ssl) {
         }
     }
 
-    // Fonction pour gérer la communication avec le client
-    Packet packet;
-    packet.flag = NEW_CLIENT_HELLO;
-    SSL_write(ssl, &packet, sizeof(packet));
-
     sqlite3 *db;
     int rc = sqlite3_open("sqlite/database.db", &db);
     writeToLog("the database is open");
@@ -54,6 +50,30 @@ void handle_client(SSL *ssl) {
 
         sqlite3_close(db);
     }
+
+    Packet packet;
+    packet.flag = REQUEST_USER_API;
+    SSL_write(ssl, &packet, sizeof(packet));
+
+    Packet authPacket;
+    int bytes_received = SSL_read(ssl, &authPacket, sizeof(authPacket));
+    if(bytes_received > 0){
+        if(authPacket.flag == API_RESPONSE && authenticateUser(db, authPacket.apiPacket.api) == 1){
+            // si l'api est correcte, on vérifie l'ip associé afin d'éviter un potentiel vol d'api
+            if(strcmp(ip_str, getIPByUserAPI(db, authPacket.apiPacket.api)) == 0){
+                Packet packet;
+                packet.flag = AUTH_SUCCESS;
+                SSL_write(ssl, &packet, sizeof(packet));
+            } else {
+                writeToLog("Connection from unauthorized api. Closing the connection.");
+                exit(EXIT_SUCCESS);
+            }
+        } else {
+            writeToLog("Connection from unauthorized api. Closing the connection.");
+            exit(EXIT_SUCCESS);
+        }
+    }
+    
     
 
     while (1) {
@@ -112,7 +132,7 @@ void handle_client(SSL *ssl) {
 
                 case HEADER_FILE:
                     memcpy(packetReceive.fileInfo.slug, replace(packetReceive.fileInfo.path, '/', '_'), strlen(replace(packetReceive.fileInfo.path, '/', '_')) + 1);
-                    insertNewFile(db, &packetReceive);
+                    insertNewFile(db, &packetReceive, authPacket.apiPacket.api);
                     updateFile(db, &packetReceive);
                     printf("open file\n");
                     writeToLog("FILE RECEIVE");
@@ -136,7 +156,7 @@ void handle_client(SSL *ssl) {
                     if(1 == 1){
                         writeToLog("REQUEST_ALL_PATH received");
                         int rowCount = 0;
-                        char **results = selectAllPathFromFile(db, &rowCount);
+                        char **results = selectAllPathFromFile(db, &rowCount, authPacket.apiPacket.api);
                         for(int i = 0; i < rowCount; i++){
                             packetResponse.flag = RESPONSE_PATH;
                             memcpy(packetResponse.fileInfo.path, results[i], strlen(results[i]) + 1);
@@ -163,7 +183,7 @@ void handle_client(SSL *ssl) {
                     writeToLog("send HEADER_FILE");
                     writeToLog(packetResponse.fileInfo.path);
 
-                    const char *slug = selectSlugByPath(db, packetReceive.fileInfo.path);
+                    const char *slug = selectSlugByPath(db, packetReceive.fileInfo.path, authPacket.apiPacket.api);
                     memcpy(packetResponse.fileInfo.slug, slug, strlen(slug) + 1);
                     // envoi du contenu
 
@@ -213,7 +233,7 @@ void handle_client(SSL *ssl) {
                         int count = selectCountFile(db);
                         Restore restore;
                         restore.restorePath = malloc(sizeof(RestorePath) * count);
-                        selectAllPath(db, &restore);
+                        selectAllPath(db, &restore, authPacket.apiPacket.api);
                         for(int i = 0; i < count; i++){
                             packetResponse.flag = REQUEST_FILE_RESTORE;
                             memcpy(packetResponse.fileInfo.path, restore.restorePath[i].path, strlen(restore.restorePath[i].path) + 1);
@@ -332,7 +352,7 @@ int main() {
 
     printf("Le serveur écoute sur le port %d...\n", PORT);
     writeToLog("The server is listening on port");
-    writeToLog(PORT);
+    //writeToLog(PORT);
     while (1) {
         // Accepter la connexion d'un client
         client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);

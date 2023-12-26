@@ -15,4 +15,17 @@ sudo apt-get install libsqlite3-dev
 
 make clean; make all
 
+build/apikey
+une api va être généré
+taper l'ip qui sera associé à cette clé api
+
+
+copier coller cette clé api dans le fichier .api
+
+lancer le serveur
+build/server
+
+lancer le client 
+build/client IP PORT SYNCHRONIZE|RESTORE path-to-save extensions.conf
+
 ```

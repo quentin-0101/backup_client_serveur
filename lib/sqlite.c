@@ -4,8 +4,28 @@
 
 int createDatabase(sqlite3 *db, int rc){
     // Création d'une table de test
-    const char *createFileTableSQL = "CREATE TABLE IF NOT EXISTS file (path TEXT PRIMARY KEY, lastModification TEXT, slug TEXT );";
+
+    char *createUsersTableSQL = "CREATE TABLE IF NOT EXISTS users ("
+                                 "api TEXT PRIMARY KEY," 
+                                 "ip TEXT UNIQUE"
+                                 ");";
+                                    
+    rc = sqlite3_exec(db, createUsersTableSQL, 0, 0, 0);
+
+    char *createFileTableSQL = "CREATE TABLE IF NOT EXISTS file ("
+                                 "path TEXT, "
+                                 "lastModification TEXT, "
+                                 "slug TEXT, "
+                                 "user_api TEXT, "
+                                 "PRIMARY KEY (path, user_api), "
+                                 "FOREIGN KEY (user_api) REFERENCES users(api)"
+                                 ");";
+
     rc = sqlite3_exec(db, createFileTableSQL, 0, 0, 0);
+
+
+
+
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error creating table: %s\n", sqlite3_errmsg(db));
@@ -60,12 +80,11 @@ const char *selectLastModificationFromFileByPath(sqlite3 *db, const char *path) 
 }
 
 
-int insertNewFile(sqlite3 *db, Packet *packet) {
-   
+int insertNewFile(sqlite3 *db, Packet *packet, const char *user_api) {
     sqlite3_exec(db, "BEGIN TRANSACTION", 0, 0, 0);
-    const char *insert_sql = "INSERT INTO file (path, lastModification, slug) VALUES (?, ?, ?);";
+    const char *insert_sql = "INSERT INTO file (path, lastModification, slug, user_api) VALUES (?, ?, ?, ?);";
     sqlite3_stmt *stmt;
-     int rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
+    int rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error preparing INSERT statement: %s\n", sqlite3_errmsg(db));
@@ -79,7 +98,6 @@ int insertNewFile(sqlite3 *db, Packet *packet) {
         sqlite3_finalize(stmt);
         return rc;
     }
-    // --------
 
     rc = sqlite3_bind_text(stmt, 2, packet->fileInfo.lastModification, -1, SQLITE_STATIC);
     if (rc != SQLITE_OK) {
@@ -87,7 +105,6 @@ int insertNewFile(sqlite3 *db, Packet *packet) {
         sqlite3_finalize(stmt);
         return rc;
     }
-     // --------
 
     rc = sqlite3_bind_text(stmt, 3, packet->fileInfo.slug, -1, SQLITE_STATIC);
     if (rc != SQLITE_OK) {
@@ -95,7 +112,13 @@ int insertNewFile(sqlite3 *db, Packet *packet) {
         sqlite3_finalize(stmt);
         return rc;
     }
-     // --------
+
+    rc = sqlite3_bind_text(stmt, 4, user_api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding user_api parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
 
     // Exécution de la requête INSERT
     rc = sqlite3_step(stmt);
@@ -181,11 +204,11 @@ int selectCountFile(sqlite3 *db){
 
     sqlite3_finalize(stmt);
 
-    return NULL;
+    return -1;
 }
 
 
-int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
+int deleteFileWithFilePath(sqlite3 *db, const char *filePath, const char *user_api) {
 
     sqlite3_exec(db, "BEGIN TRANSACTION", 0, 0, 0);
 
@@ -193,7 +216,7 @@ int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
     sqlite3_stmt *stmt;
 
     // Préparer la requête DELETE
-    const char *delete_sql = "DELETE FROM file WHERE path = ?";
+    const char *delete_sql = "DELETE FROM file WHERE path = ? AND user_api = ?";
 
     int rc = sqlite3_prepare_v2(db, delete_sql, -1, &stmt, 0);
     if (rc != SQLITE_OK) {
@@ -203,6 +226,13 @@ int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
 
     // Lier la valeur de filePath au paramètre dans la requête
     rc = sqlite3_bind_text(stmt, 1, filePath, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Erreur de liaison du paramètre : %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    rc = sqlite3_bind_text(stmt, 2, user_api, -1, SQLITE_STATIC);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Erreur de liaison du paramètre : %s\n", sqlite3_errmsg(db));
         sqlite3_finalize(stmt);
@@ -223,14 +253,21 @@ int deleteFileWithFilePath(sqlite3 *db, const char *filePath) {
     return rc;
 }
 
-char** selectAllPathFromFile(sqlite3* db, int* rowCount) {
-    const char* select_sql = "SELECT path FROM file;";
+char** selectAllPathFromFile(sqlite3* db, int* rowCount, char *user_api) {
+    const char* select_sql = "SELECT path FROM file WHERE user_api = ?;";
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
         return NULL;
+    }
+
+    rc = sqlite3_bind_text(stmt, 1, user_api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Erreur de liaison du paramètre : %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        //return rc;
     }
 
     // Exécution de la requête SELECT
@@ -247,7 +284,7 @@ char** selectAllPathFromFile(sqlite3* db, int* rowCount) {
     *rowCount = 0;
 
     while (rc == SQLITE_ROW) {
-        const char* path = (const char*)sqlite3_column_text(stmt, 0);
+        char* path = (char*)sqlite3_column_text(stmt, 0);
 
         // Allocation mémoire pour la nouvelle chaîne de caractères
         char* newPath = strdup(path);
@@ -267,8 +304,8 @@ char** selectAllPathFromFile(sqlite3* db, int* rowCount) {
     return paths;
 }
 
-const char *selectSlugByPath(sqlite3 *db, const char *path) {
-    const char *select_sql = "SELECT slug FROM file WHERE path = ?;";
+const char *selectSlugByPath(sqlite3 *db, const char *path, const char *user_api) {
+    const char *select_sql = "SELECT slug FROM file WHERE path = ? AND user_api = ?;";
 
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
@@ -280,7 +317,13 @@ const char *selectSlugByPath(sqlite3 *db, const char *path) {
 
     // Lier le nom comme paramètre de la requête préparée
     rc = sqlite3_bind_text(stmt, 1, path, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        exit(EXIT_FAILURE);
+    }
 
+    rc = sqlite3_bind_text(stmt, 2, user_api, -1, SQLITE_STATIC);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
         sqlite3_finalize(stmt);
@@ -305,8 +348,8 @@ const char *selectSlugByPath(sqlite3 *db, const char *path) {
 }
 
 
-int selectAllPath(sqlite3 *db, Restore *restore) {
-    const char *select_sql = "SELECT path,slug,lastModification FROM file;";
+int selectAllPath(sqlite3 *db, Restore *restore, const char *user_api) {
+    const char *select_sql = "SELECT path,slug,lastModification FROM file WHERE user_api = ?;";
 
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
@@ -316,13 +359,22 @@ int selectAllPath(sqlite3 *db, Restore *restore) {
         return rc;
     }
 
+    // Lier le nom comme paramètre de la requête préparée
+    rc = sqlite3_bind_text(stmt, 1, user_api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding path parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        exit(EXIT_FAILURE);
+    }
+
+
     // Exécution de la requête SELECT
     int i = 0;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         // Lire les résultats de la requête ici
-        char *resultPath = (const char *)sqlite3_column_text(stmt, 0);
-        char *resultSlug = (const char *)sqlite3_column_text(stmt, 1);
-        char *resultLastModification = (const char *)sqlite3_column_text(stmt, 2);
+        char *resultPath = (char *)sqlite3_column_text(stmt, 0);
+        char *resultSlug = (char *)sqlite3_column_text(stmt, 1);
+        char *resultLastModification = (char *)sqlite3_column_text(stmt, 2);
         
         strncpy(restore->restorePath[i].path, resultPath, sizeof(restore->restorePath[i].path));
         strncpy(restore->restorePath[i].slug, resultSlug, sizeof(restore->restorePath[i].slug));
@@ -338,6 +390,120 @@ int selectAllPath(sqlite3 *db, Restore *restore) {
     return 0;
 }
 
+int authenticateUser(sqlite3 *db, const char *user_api) {
+    const char *select_sql = "SELECT api FROM users WHERE api = ?;";
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // Lier la valeur aux paramètres de la requête préparée
+    rc = sqlite3_bind_text(stmt, 1, user_api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding user_api parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    // Exécution de la requête SELECT
+    rc = sqlite3_step(stmt);
+
+    if (rc == SQLITE_ROW) {
+        // L'utilisateur a été trouvé, donc l'authentification est réussie
+        printf("L'authentification a réussi pour l'utilisateur avec API : %s\n", user_api);
+        return 1;
+    } else if (rc == SQLITE_DONE) {
+        // Aucun utilisateur trouvé avec cet API
+        printf("L'authentification a échoué. Aucun utilisateur trouvé avec API : %s\n", user_api);
+        return 0;
+    } else {
+        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    sqlite3_finalize(stmt);
+
+    return rc;
+}
+
+char* getIPByUserAPI(sqlite3 *db, const char *user_api) {
+    const char *select_sql = "SELECT ip FROM users WHERE api = ?;";
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing SELECT statement: %s\n", sqlite3_errmsg(db));
+        return NULL;
+    }
+
+    // Lier la valeur aux paramètres de la requête préparée
+    rc = sqlite3_bind_text(stmt, 1, user_api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding user_api parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return NULL;
+    }
+
+    // Exécution de la requête SELECT
+    rc = sqlite3_step(stmt);
+
+    char *ip_result = NULL;
+
+    if (rc == SQLITE_ROW) {
+        // Récupérer la valeur de la colonne IP
+        ip_result = strdup((const char *)sqlite3_column_text(stmt, 0));
+        printf("L'IP pour l'utilisateur avec API %s est : %s\n", user_api, ip_result);
+    } else if (rc == SQLITE_DONE) {
+        // Aucun utilisateur trouvé avec cet API
+        printf("Aucun utilisateur trouvé avec API : %s\n", user_api);
+    } else {
+        fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    sqlite3_finalize(stmt);
+
+    return ip_result;
+}
+
+
+int insertUser(sqlite3 *db, const char *api, const char *ip) {
+    const char *insert_sql = "INSERT INTO users (api, ip) VALUES (?, ?);";
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing INSERT statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // Lier les valeurs aux paramètres de la requête préparée
+    rc = sqlite3_bind_text(stmt, 1, api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding api parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    rc = sqlite3_bind_text(stmt, 2, ip, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding ip parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    // Exécution de la requête INSERT
+    rc = sqlite3_step(stmt);
+
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing INSERT statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    sqlite3_finalize(stmt);
+
+    return rc;
+}
 
 /*
 int main(){

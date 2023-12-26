@@ -28,7 +28,7 @@ FILE *fichier;
 
 
 
-void handle_ctrl_c(int signo) {
+void handle_ctrl_c() {
     printf("Vous avez appuyé sur Ctrl + C !\n");
     Packet packet;
     packet.flag = EXIT;
@@ -50,7 +50,24 @@ void onPacketReceive(Packet packetReceive){
 
     switch (packetReceive.flag)
     {
-        case NEW_CLIENT_HELLO:
+
+        case REQUEST_USER_API:
+            FILE *api_file = fopen(".api", "r");
+            if (api_file == NULL) {
+                perror("Erreur lors de l'ouverture du fichier");
+                return 0;
+            }
+
+            size_t taille_lue = fread(packetResponse.apiPacket.api, 1, sizeof(packetResponse.apiPacket.api) - 1, api_file);
+            packetResponse.apiPacket.api[taille_lue] = '\0';
+            fclose(api_file);
+           
+            printf("Contenu du fichier :\n%s\n", packetResponse.apiPacket.api);
+            packetResponse.flag = API_RESPONSE;
+            SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+            break;
+
+        case AUTH_SUCCESS:
             if(strcmp(mod, "SYNCHRONIZE") == 0){
                 // Lit les extensions depuis le fichier
                 readExtensionsFromFile(extensionsFile, &extensions, &numExtensions);
