@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include "../objects/packet.h"
 #include "../objects/restore.h"
+#include "utils.h"
 
 int createDatabase(sqlite3 *db, int rc);
 const char *selectLastModificationFromFileByPath(sqlite3 *db, const char *path);

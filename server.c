@@ -17,6 +17,23 @@
 
 
 void handle_client(SSL *ssl) {
+
+    
+    struct sockaddr_in peer_addr;
+    socklen_t addr_len = sizeof(peer_addr);
+    
+    char ip_str[INET_ADDRSTRLEN];
+    if (getpeername(SSL_get_fd(ssl), (struct sockaddr *)&peer_addr, &addr_len) == 0) {
+        
+        
+        if (inet_ntop(AF_INET, &peer_addr.sin_addr, ip_str, sizeof(ip_str)) != NULL) {
+            // Print or use the client's IP address
+            printf("Client IP: %s\n", ip_str);
+            writeToLog("new client connected");
+            writeToLog(ip_str);
+        }
+    }
+
     // Fonction pour gérer la communication avec le client
     Packet packet;
     packet.flag = NEW_CLIENT_HELLO;
@@ -24,9 +41,13 @@ void handle_client(SSL *ssl) {
 
     sqlite3 *db;
     int rc = sqlite3_open("sqlite/database.db", &db);
+    writeToLog("the database is open");
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
+        writeToLog("error when open database");
+        writeToLog( sqlite3_errmsg(db));
+
         sqlite3_close(db);
     }
     
@@ -43,8 +64,6 @@ void handle_client(SSL *ssl) {
 
 
         if (bytes_received > 0) {
-            
-
             switch (packetReceive.flag)
             {
                 case CONFIRM_RECEPTION:
@@ -53,6 +72,8 @@ void handle_client(SSL *ssl) {
                 
                 case EXIT:
                     printf("un client vient de se déconnecter\n");
+                    writeToLog("Client disconnected");
+                    writeToLog(ip_str);
                     sqlite3_close(db);
                     exit(EXIT_SUCCESS);
                     break;
@@ -70,13 +91,16 @@ void handle_client(SSL *ssl) {
                     if(lastDateUpdate == NULL){
                         packetResponse.flag = REQUEST_FILE;
                         memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                        writeToLog("REQUEST FILE");
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                     } else { // le fichier est connu
                         if(strcmp(lastDateUpdate, packetReceive.fileInfo.lastModification) == 0){ // le fichier est à la même version que la sauvegarde : ne rien faire
                             printf("le fichier est déja sauvegardé à la dernière version\n");
+                            writeToLog("the file requested is already save to the last version");
                         } else { // le fichier à changé : il faut le resauvegarder
                             packetResponse.flag = REQUEST_FILE;
                             memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                            writeToLog("REQUEST FILE");
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                         }
                     }
@@ -87,6 +111,9 @@ void handle_client(SSL *ssl) {
                     insertNewFile(db, &packetReceive);
                     updateFile(db, &packetReceive);
                     printf("open file\n");
+                    writeToLog("FILE RECEIVE");
+                    writeToLog(packetReceive.fileInfo.path);
+
                     snprintf(slug, sizeof(slug), "server_data/%s", packetReceive.fileInfo.slug);
                     fichier = fopen(slug, "wb");
                     break;
@@ -97,11 +124,13 @@ void handle_client(SSL *ssl) {
                 case FINISH_FILE:
                     fclose(fichier);
                     printf("close file");
+                    writeToLog("CLOSE FILE");
                     break;
 
 
                 case REQUEST_ALL_PATH:
                     if(1 == 1){
+                        writeToLog("REQUEST_ALL_PATH received");
                         int rowCount = 0;
                         char **results = selectAllPathFromFile(db, &rowCount);
                         for(int i = 0; i < rowCount; i++){
@@ -111,18 +140,24 @@ void handle_client(SSL *ssl) {
                             memset(packetResponse.fileInfo.path, 0, sizeof(packetResponse.fileInfo.path));
                         }
                         packetResponse.flag = RESPONSE_PATH_FINISH;
+                        writeToLog("send RESPONSE_PATH_FINISH");
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+
                     }
 
                     break;
 
                 case REQUEST_FILE:  
                     printf("REQUEST_FILE received\n");
-
+                    writeToLog("REQUEST_FILE received");
                     // envoi de l'entête
                     packetResponse.flag = HEADER_FILE;
                     memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                     SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+
+
+                    writeToLog("send HEADER_FILE");
+                    writeToLog(packetResponse.fileInfo.path);
 
                     const char *slug = selectSlugByPath(db, packetReceive.fileInfo.path);
                     memcpy(packetResponse.fileInfo.slug, slug, strlen(slug) + 1);
@@ -132,12 +167,16 @@ void handle_client(SSL *ssl) {
                     snprintf(filePath, sizeof(filePath), "server_data/%s", packetResponse.fileInfo.slug);
 
                     fichier = fopen(filePath, "rb");
+                    writeToLog("open file");
+                    writeToLog(filePath);
                     if (fichier == NULL) {
+                        writeToLog("Erreur lors de l'ouverture du fichier");
                         perror("Erreur lors de l'ouverture du fichier");
                     }
                     unsigned char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(unsigned char));
 
                     if (buffer == NULL) {
+                        writeToLog("Erreur d'allocation mémoire");
                         perror("Erreur d'allocation mémoire");
                         fclose(fichier);
                     }
@@ -151,6 +190,7 @@ void handle_client(SSL *ssl) {
                         packetResponse.fileContent.size = octetsLus;
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                         memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
+                        writeToLog("send CONTENT_FILE");
                     }
 
                     free(buffer); // Libérer la mémoire du tampon
@@ -160,9 +200,11 @@ void handle_client(SSL *ssl) {
                     packetResponse.flag = FINISH_FILE;
                     SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                     printf("envoi fini\n");
+                    writeToLog("send FINISH_FILE");
                     break;
 
                 case REQUEST_RESTORE:
+                    writeToLog("received REQUEST_RESTORE");
                     if(1 == 1){
                         int count = selectCountFile(db);
                         Restore restore;
@@ -174,6 +216,8 @@ void handle_client(SSL *ssl) {
                             memcpy(packetResponse.fileInfo.lastModification, restore.restorePath[i].lastModification, strlen(restore.restorePath[i].lastModification) + 1);
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                             printf("envoi : %s\n", packetResponse.fileInfo.path);
+                            writeToLog("send REQUEST_FILE_RESTORE");
+                            writeToLog(packetResponse.fileInfo.path);
                         }
                         free(restore.restorePath);
                     }
@@ -186,6 +230,7 @@ void handle_client(SSL *ssl) {
                     break;
                 
                 default:
+                    writeToLog("PACKET RECEIVE NOT FOUND");
                     printf("paquet non reconnu !!\n");
                     break;
             }
@@ -211,6 +256,8 @@ int main() {
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
+        writeToLog("error when open database");
+        writeToLog(sqlite3_errmsg(db));
         sqlite3_close(db);
     }
 

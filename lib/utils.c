@@ -29,3 +29,43 @@ void deleteAfterLastSlash(char *path) {
         *lastSlash = '\0';
     }
 }
+
+void createBackupDirectory() {
+    struct stat st = {0};
+    
+    if (stat("/var/log/backup", &st) == -1) {
+        if (mkdir("/var/log/backup", 0700) != 0) {
+            fprintf(stderr, "Error: Unable to create the backup directory.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+void writeToLog(const char *message) {
+    FILE *logFile;
+    time_t currentTime;
+    struct tm *timeInfo;
+    char logFileName[50];  // Adjust the size based on your needs
+    char timestamp[20];
+
+    createBackupDirectory();  // Create the backup directory if it doesn't exist
+
+    time(&currentTime);
+    timeInfo = localtime(&currentTime);
+
+    // Specify the full path for the log file in /var/log/backup
+    strftime(logFileName, sizeof(logFileName), "/var/log/backup/logfile_%Y-%m-%d.txt", timeInfo);
+
+    logFile = fopen(logFileName, "a");
+
+    if (logFile == NULL) {
+        fprintf(stderr, "Error: Unable to open the log file.\n");
+        return;
+    }
+
+    strftime(timestamp, sizeof(timestamp), "[%H:%M:%S] ", timeInfo);
+
+    fprintf(logFile, "%s%s\n", timestamp, message);
+
+    fclose(logFile);
+}

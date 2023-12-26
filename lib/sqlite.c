@@ -9,9 +9,12 @@ int createDatabase(sqlite3 *db, int rc){
 
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error creating table: %s\n", sqlite3_errmsg(db));
+        writeToLog("Error creating table");
+        writeToLog(sqlite3_errmsg(db));
         sqlite3_close(db);
         return rc;
     }
+    writeToLog("the database has been successfully created");
     return rc;
 }
 
@@ -46,6 +49,8 @@ const char *selectLastModificationFromFileByPath(sqlite3 *db, const char *path) 
 
     if (rc != SQLITE_DONE) {
         fprintf(stderr, "Error executing SELECT statement: %s\n", sqlite3_errmsg(db));
+        writeToLog("Error executing SELECT statement:");
+        writeToLog(sqlite3_errmsg(db));
         exit(EXIT_FAILURE);
     }
 
