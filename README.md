@@ -9,4 +9,10 @@ openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
  
 cd ..
 
+
+sudo apt-get update
+sudo apt-get install libsqlite3-dev
+
 make clean; make all
+
+```
