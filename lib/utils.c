@@ -69,3 +69,29 @@ void writeToLog(const char *message) {
 
     fclose(logFile);
 }
+
+
+int isIPAllowed(const char *ip) {
+    FILE *file = fopen("ip_allow.conf", "r");
+    if (file == NULL) {
+        perror("Erreur lors de l'ouverture du fichier ip_allow.conf");
+        return 0;  // Assume denied on file error
+    }
+
+    char line[16 + 1];
+    int allowed = 0;
+
+    while (fgets(line, sizeof(line), file) != NULL) {
+        // Remove newline character
+        line[strcspn(line, "\n")] = '\0';
+
+        if (strcmp(line, ip) == 0) {
+            allowed = 1;
+            break;
+        }
+    }
+
+    fclose(file);
+
+    return allowed;
+}

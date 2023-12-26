@@ -27,10 +27,16 @@ void handle_client(SSL *ssl) {
         
         
         if (inet_ntop(AF_INET, &peer_addr.sin_addr, ip_str, sizeof(ip_str)) != NULL) {
-            // Print or use the client's IP address
-            printf("Client IP: %s\n", ip_str);
-            writeToLog("new client connected");
-            writeToLog(ip_str);
+            if (isIPAllowed(ip_str)) {
+                printf("Client IP: %s\n", ip_str);
+                writeToLog("new client connected");
+                writeToLog(ip_str);
+            } else {
+                printf("Connection from %s not allowed. Closing the connection.\n", ip_str);
+                writeToLog("Connection from unauthorized IP. Closing the connection.");
+                writeToLog(ip_str);
+                exit(EXIT_SUCCESS);
+            }
         }
     }
 
