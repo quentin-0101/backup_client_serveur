@@ -19,3 +19,13 @@ char* replace(const char *str, char last, char new) {
     }
     return result;
 }
+
+void deleteAfterLastSlash(char *path) {
+    // Recherche du dernier '/'
+    char *lastSlash = strrchr(path, '/');
+    
+    // Si un '/' est trouvé, tronquer la chaîne après ce point
+    if (lastSlash != NULL) {
+        *lastSlash = '\0';
+    }
+}

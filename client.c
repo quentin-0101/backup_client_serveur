@@ -163,15 +163,7 @@ void onPacketReceive(Packet packetReceive){
                 if(1 == 1){
                     printf("votre choix : ");
                     fflush(stdin);
-                    fgets(packetResponse.fileInfo.path, sizeof(packetResponse.fileInfo.path), stdin);
-                
-                    
-                    // enlever le caractère \n qui est automatique avec fgets
-                    for(int i = 0; i < strlen(packetResponse.fileInfo.path); i++){
-                        if(packetResponse.fileInfo.path[i] == '\n'){
-                            packetResponse.fileInfo.path[i] = '\0';
-                        }
-                    }
+                    scanf("%s", packetResponse.fileInfo.path);      
 
                     printf("choix : %s\n", packetResponse.fileInfo.path);
 
@@ -201,15 +193,28 @@ void onPacketReceive(Packet packetReceive){
                 break;
 
             case HEADER_FILE:
-                remove(packetReceive.fileInfo.path);
-                char command[2048];
-                snprintf(command, sizeof(command), "mkdir -p %s", dirname(packetReceive.fileInfo.path));
+                char dirpath[2048];
+                char command[4096];
+                memcpy(dirpath, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                deleteAfterLastSlash(dirpath);
+                
+                snprintf(command, sizeof(command), "mkdir -p %s", dirpath);
+
                 system(command);
+                printf("création de %s\n", dirpath);
+
+                if (access(packetReceive.fileInfo.path, F_OK) != -1) { // si le fichier existe
+                     remove(packetReceive.fileInfo.path);
+                }
+               
                 fichier = fopen(packetReceive.fileInfo.path, "wb");
                 break;
             
             case CONTENT_FILE:
                 // Écrire les données dans le fichier
+                printf("ok\n");
+                printf("packetReceive.fileContent.content : %s\n", packetReceive.fileContent.content);
+                printf("packetReceive.fileContent.size : %d\n", packetReceive.fileContent.size);
                 fwrite(packetReceive.fileContent.content, 1, packetReceive.fileContent.size, fichier);
                 break;
             
@@ -217,8 +222,6 @@ void onPacketReceive(Packet packetReceive){
                 fclose(fichier);
                 printf("close file\n");
                 break;
-            
-
             
         default:
             break;

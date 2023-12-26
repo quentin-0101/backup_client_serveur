@@ -72,7 +72,6 @@ void handle_client(SSL *ssl) {
                         memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                     } else { // le fichier est connu
-                        sqlite3_busy_timeout(db, 1000); 
                         if(strcmp(lastDateUpdate, packetReceive.fileInfo.lastModification) == 0){ // le fichier est à la même version que la sauvegarde : ne rien faire
                             printf("le fichier est déja sauvegardé à la dernière version\n");
                         } else { // le fichier à changé : il faut le resauvegarder

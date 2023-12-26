@@ -7,5 +7,5 @@
 #include <sys/stat.h>
 
 char* replace(const char *str, char last, char new);
-
+void deleteAfterLastSlash(char *chaine);
 #endif
