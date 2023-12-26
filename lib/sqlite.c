@@ -505,6 +505,43 @@ int insertUser(sqlite3 *db, const char *api, const char *ip) {
     return rc;
 }
 
+
+int updateIPByAPI(sqlite3 *db, const char *api, const char *newIP) {
+    const char *update_sql = "UPDATE users SET ip = ? WHERE api = ?;";
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, update_sql, -1, &stmt, NULL);
+
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing UPDATE statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // Lier les valeurs aux paramètres de la requête préparée
+    rc = sqlite3_bind_text(stmt, 1, newIP, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding newIP parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    rc = sqlite3_bind_text(stmt, 2, api, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error binding api parameter: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return rc;
+    }
+
+    // Exécution de la requête UPDATE
+    rc = sqlite3_step(stmt);
+
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing UPDATE statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    sqlite3_finalize(stmt);
+
+    return rc;
+}
 /*
 int main(){
 

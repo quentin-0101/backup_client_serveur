@@ -23,4 +23,7 @@ int selectAllPath(sqlite3 *db, Restore *restore, const char *user_api);
 int authenticateUser(sqlite3 *db, const char *user_api);
 char* getIPByUserAPI(sqlite3 *db, const char *user_api);
 int insertUser(sqlite3 *db, const char *api, const char *ip);
+int updateIPByAPI(sqlite3 *db, const char *api, const char *newIP);
+
+
 #endif
