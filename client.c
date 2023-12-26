@@ -212,9 +212,6 @@ void onPacketReceive(Packet packetReceive){
             
             case CONTENT_FILE:
                 // Écrire les données dans le fichier
-                printf("ok\n");
-                printf("packetReceive.fileContent.content : %s\n", packetReceive.fileContent.content);
-                printf("packetReceive.fileContent.size : %d\n", packetReceive.fileContent.size);
                 fwrite(packetReceive.fileContent.content, 1, packetReceive.fileContent.size, fichier);
                 break;
             
