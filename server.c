@@ -123,7 +123,7 @@ void handle_client(SSL *ssl) {
                     break;
 
                 case HEADER_FILE:
-                    memcpy(packetReceive.fileInfo.slug, replace(packetReceive.fileInfo.path, '/', '_'), strlen(replace(packetReceive.fileInfo.path, '/', '_')) + 1);
+                    generateRandomKey(packetReceive.fileInfo.slug, 32);
                     insertNewFile(db, &packetReceive, authPacket.apiPacket.api);
                     updateFile(db, &packetReceive);
                     printf("open file\n");

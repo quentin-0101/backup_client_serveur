@@ -11,6 +11,6 @@ char* replace(const char *str, char last, char new);
 void deleteAfterLastSlash(char *chaine);
 void createBackupDirectory();
 void writeToLog(const char *message);
-int isIPAllowed(const char *ip);
+void generateRandomKey(char *apiKey, size_t length);
 
 #endif

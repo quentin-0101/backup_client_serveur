@@ -2,18 +2,9 @@
 #include <stdlib.h>
 #include <openssl/rand.h>
 #include "lib/sqlite.h"
+#include "lib/utils.h"
 
 #define API_KEY_LENGTH 32
-
-void generateApiKey(char *apiKey, size_t length) {
-    const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    const size_t charsetSize = sizeof(charset) - 1;
-
-    for (size_t i = 0; i < length; ++i) {
-        RAND_bytes((unsigned char *)&apiKey[i], 1);
-        apiKey[i] = charset[apiKey[i] % charsetSize];
-    }
-}
 
 int main() {
 
@@ -40,7 +31,7 @@ int main() {
         char apiKey[API_KEY_LENGTH + 1];  
 
         // Generate API key
-        generateApiKey(apiKey, API_KEY_LENGTH);
+        generateRandomKey(apiKey, API_KEY_LENGTH);
         apiKey[API_KEY_LENGTH] = '\0';  
 
         // Print the generated API key

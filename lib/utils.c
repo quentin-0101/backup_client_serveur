@@ -69,3 +69,14 @@ void writeToLog(const char *message) {
 
     fclose(logFile);
 }
+
+
+void generateRandomKey(char *apiKey, size_t length) {
+    const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    const size_t charsetSize = sizeof(charset) - 1;
+
+    for (size_t i = 0; i < length; ++i) {
+        RAND_bytes((unsigned char *)&apiKey[i], 1);
+        apiKey[i] = charset[apiKey[i] % charsetSize];
+    }
+}
