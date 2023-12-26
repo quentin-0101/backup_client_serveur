@@ -24,8 +24,6 @@ void handle_client(SSL *ssl) {
     
     char ip_str[INET_ADDRSTRLEN];
     if (getpeername(SSL_get_fd(ssl), (struct sockaddr *)&peer_addr, &addr_len) == 0) {
-        
-        
         if (inet_ntop(AF_INET, &peer_addr.sin_addr, ip_str, sizeof(ip_str)) != NULL) {
             if (isIPAllowed(ip_str)) {
                 printf("Client IP: %s\n", ip_str);
@@ -297,8 +295,9 @@ int main() {
     // Charger le certificat et la clé privée
     if (SSL_CTX_use_certificate_file(ctx, "certificats/server.crt", SSL_FILETYPE_PEM) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ctx, "certificats/server.key", SSL_FILETYPE_PEM) <= 0) {
-        fprintf(stderr, "Erreur lors du chargement du certificat/clave privée.\n");
-        return EXIT_FAILURE;
+            writeToLog("Error loading certificate/private key");
+            fprintf(stderr, "Erreur lors du chargement du certificat/clave privée.\n");
+            return EXIT_FAILURE;
     }
 
     // Créer la socket du serveur
@@ -306,6 +305,7 @@ int main() {
 
     if (server_socket == -1) {
         perror("Erreur lors de la création de la socket du serveur");
+        writeToLog("Error creating the server socket");
         return EXIT_FAILURE;
     }
 
@@ -317,6 +317,7 @@ int main() {
     // Lier la socket du serveur à l'adresse et au port
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         perror("Erreur lors de la liaison de la socket du serveur");
+        writeToLog("Error linking server socket");
         close(server_socket);
         return EXIT_FAILURE;
     }
@@ -324,18 +325,21 @@ int main() {
     // Mettre en écoute la socket du serveur
     if (listen(server_socket, 10) == -1) {
         perror("Erreur lors de la mise en écoute de la socket du serveur");
+        writeToLog("Error listening to the server socket");
         close(server_socket);
         return EXIT_FAILURE;
     }
 
     printf("Le serveur écoute sur le port %d...\n", PORT);
-
+    writeToLog("The server is listening on port");
+    writeToLog(PORT);
     while (1) {
         // Accepter la connexion d'un client
         client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);
 
         if (client_socket == -1) {
             perror("Erreur lors de l'acceptation de la connexion client");
+            writeToLog("Error accepting client connection");
             close(server_socket);
             SSL_CTX_free(ctx);
             return EXIT_FAILURE;
@@ -354,6 +358,7 @@ int main() {
 
             if (pid == -1) {
                 perror("Erreur lors de la création du processus fils");
+                writeToLog("Error creating child process");
                 close(client_socket);
             } else if (pid == 0) {
                 // Processus fils
