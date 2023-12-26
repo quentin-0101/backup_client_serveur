@@ -35,13 +35,14 @@ int main() {
         apiKey[API_KEY_LENGTH] = '\0';  
 
         // Print the generated API key
-        printf("Clé API générée : %s\n", apiKey);
 
         char ip[2048];
         printf("taper une ip : ");
         scanf("%s", ip);
 
         insertUser(db, apiKey, ip);
+
+        printf("Clé API générée : %s\n", apiKey);
 
         break;
 
