@@ -11,6 +11,7 @@
 
 #include "lib/postgresql.h"
 #include "lib/utils.h"
+#include "lib/readConfigFile.h"
 
 #define PORT 12347
 
@@ -31,8 +32,13 @@ void handle_client(SSL *ssl) {
         }
     }
 
-    const char *conninfo = "dbname=backup user=postgres password=password host=127.0.0.1 port=5431";
-    PGconn *conn = PQconnectdb(conninfo);
+    DatabaseConfig databaseConfig;
+    readDatabaseConfig("database.conf", &databaseConfig);
+
+    const char *conninfo = buildDatabaseConnectionString(&databaseConfig);
+    PGconn *conn = PQconnectdb(conninfo);    
+
+
     if (PQstatus(conn) != CONNECTION_OK) {
         fprintf(stderr, "La connexion a échoué : %s", PQerrorMessage(conn));
         writeToLog("database connexion failed");

@@ -80,57 +80,6 @@ void searchFilesRecursive(const char *dirPath, char **extensions, int numExtensi
     closedir(dir);
 }
 
-
-/**
- * Fonction pour lire les extensions depuis un fichier
-*/
-void readExtensionsFromFile(const char *filename, char ***extensions, int *numExtensions) {
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        perror("Erreur lors de l'ouverture du fichier d'extensions");
-        exit(EXIT_FAILURE);
-    }
-
-    *numExtensions = 0;
-    *extensions = NULL;
-    char line[256];
-
-    while (fgets(line, sizeof(line), file) != NULL) {
-        // Supprime le saut de ligne à la fin de la ligne
-        line[strcspn(line, "\n")] = '\0';
-
-        // Incrémente le nombre d'extensions
-        (*numExtensions)++;
-
-        // Alloue de l'espace pour stocker l'extension
-        *extensions = realloc(*extensions, sizeof(char *) * (*numExtensions));
-        if (*extensions == NULL) {
-            perror("Erreur d'allocation de mémoire");
-            exit(EXIT_FAILURE);
-        }
-
-        // Alloue de l'espace pour stocker l'extension
-        (*extensions)[(*numExtensions) - 1] = strdup(line);
-        if ((*extensions)[(*numExtensions) - 1] == NULL) {
-            perror("Erreur d'allocation de mémoire");
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    fclose(file);
-}
-
-/**
- * Fonction pour libérer la mémoire allouée pour les extensions
-*/
-void freeExtensions(char **extensions, int numExtensions) {
-    for (int i = 0; i < numExtensions; i++) {
-        free(extensions[i]);
-    }
-    free(extensions);
-}
-
-
 /**
  * cette fonction prend un path en paramètre, et retourne la date de modification du fichier
 */

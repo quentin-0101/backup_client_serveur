@@ -5,14 +5,17 @@
 #include "lib/utils.h"
 
 #include "lib/libbcrypt/bcrypt.h"
+#include "lib/readConfigFile.h"
 
 
 #define API_SECRET_LENGTH 32
 
 int main() {
 
-    const char *conninfo = "dbname=backup user=postgres password=password host=127.0.0.1 port=5431";
+    DatabaseConfig databaseConfig;
+    readDatabaseConfig("database.conf", &databaseConfig);
 
+    const char *conninfo = buildDatabaseConnectionString(&databaseConfig);
     PGconn *conn = PQconnectdb(conninfo);
 
     if (PQstatus(conn) != CONNECTION_OK) {

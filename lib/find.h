@@ -12,6 +12,8 @@
 
 #include "../objects/packet.h"
 
+#define PATH_MAX 4096
+
 
 void searchFilesRecursive(const char *dirPath, char **extensions, int numExtensions, char ***results, int *count);
 void readExtensionsFromFile(const char *filename, char ***extensions, int *numExtensions);

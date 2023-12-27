@@ -10,6 +10,7 @@
 #include "enum/flag.h"
 
 #include "lib/find.h"
+#include "lib/readConfigFile.h"
 
 #include "lib/utils.h"
 #include "libgen.h"
@@ -21,9 +22,8 @@ SSL *ssl;
 //Packet *packetReceive = NULL;
 
 // mode => SYNCHRONIZE | RESTORE 
-char mod[1024];
-char repository[4096];
-char extensionsFile[4096];
+ConfigClient configClient;
+
 FILE *fichier;
 
 
@@ -41,8 +41,8 @@ void onPacketReceive(Packet packetReceive){
 
     char **extensions = NULL;
     int numExtensions;
-    char *paths[1000];
-    int count;
+  
+   
     Packet packetResponse;
     FILE *fichier;
     
@@ -52,35 +52,7 @@ void onPacketReceive(Packet packetReceive){
     {
 
         case REQUEST_USER_API:
-            FILE *api_file = fopen(".api", "r");
-
-            if (api_file == NULL) {
-                perror("Erreur lors de l'ouverture du fichier");
-                return 1;
-            }
-
-            char api_key[2048];
-            char api_value[2048];
-            char secret_key[2048];
-            char secret_value[2048];
-
-            // Lire le fichier .api ligne par ligne
-            while (fscanf(api_file, "%2047[^=]=%2047[^\n]\n", api_key, api_value) == 2) {
-                // Supprimer le caractère newline à la fin de la clé et de la valeur
-                api_key[strcspn(api_key, "\n")] = '\0';
-                api_value[strcspn(api_value, "\n")] = '\0';
-
-                // Utiliser strcmp pour vérifier la clé et stocker la valeur correspondante
-                if (strcmp(api_key, "api") == 0) {
-                    strcpy(packetResponse.apiPacket.api, api_value);
-                } else if (strcmp(api_key, "secret") == 0) {
-                    strcpy(packetResponse.apiPacket.secret, api_value);
-                }
-            }
-
-            fclose(api_file);
-
-            // Afficher les valeurs lues
+            readClientCredentials(".api", &packetResponse.apiPacket);
             printf("API : %s\n", packetResponse.apiPacket.api);
             printf("Secret : %s\n", packetResponse.apiPacket.secret);
            
@@ -89,33 +61,39 @@ void onPacketReceive(Packet packetReceive){
             break;
 
         case AUTH_SUCCESS:
-            if(strcmp(mod, "SYNCHRONIZE") == 0){
-                // Lit les extensions depuis le fichier
-                readExtensionsFromFile(extensionsFile, &extensions, &numExtensions);
-                for(int i = 0; i < numExtensions; i++){
-                    printf("extension : %s\n", extensions[i]);
-                }
-            
-                findFiles(repository, paths, &count, extensions, numExtensions);
-
-                printf("count : %d\n", count);
-                for(int i = 0; i < count; i++){
-                    printf("ok\n");
-                    printf("%s\n", paths[i]);
+            if(strcmp(configClient.action, "SYNCHRONIZE") == 0){
+                  
+                for(int i = 0; i < configClient.numExtensions; i++){
+                    printf("extension : %s\n", configClient.extensions[i]);
                 }
 
-                // Envois des résultats au serveur
-                for (int i = 0; i < count; i++) {
-                    if(paths[i] != NULL){
-                        printf("envoi : %s\n", paths[i]);
+                for(int i = 0; i < configClient.numRepositories; i++){
+                    char *paths[1000];
+                     int count = 0;
+                    printf("scan du répertoire %s\n", configClient.repositories[i]);
+                    findFiles(configClient.repositories[i], paths, &count, configClient.extensions, configClient.numExtensions);
+                    printf("count : %d\n", count);
+                    for(int i = 0; i < count; i++){
+                        printf("ok\n");
+                        printf("%s\n", paths[i]);
+                    }
 
-                        char *lastModification = getLastUpdated(paths[i]);
-                        packetResponse.flag = FILE_INFO;
-                        memcpy(packetResponse.fileInfo.path, paths[i], strlen(paths[i]) + 1);
-                        memcpy(packetResponse.fileInfo.lastModification, lastModification, strlen(lastModification) + 1);
-                        SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                    // Envois des résultats au serveur
+                    printf("count : %d ----------------\n", count);
+                    for (int i = 0; i < count; i++) {
+                        if(paths[i] != NULL){
+                            printf("envoi : %s\n", paths[i]);
+
+                            char *lastModification = getLastUpdated(paths[i]);
+                            packetResponse.flag = FILE_INFO;
+                            memcpy(packetResponse.fileInfo.path, paths[i], strlen(paths[i]) + 1);
+                            memcpy(packetResponse.fileInfo.lastModification, lastModification, strlen(lastModification) + 1);
+                            SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                        }
                     }
                 }
+            
+                
             } else {
                 printf("mode restauration activé : Que voulez-vous faire ?\n");
                 printf("option 1 : restaurer un seul fichier uniquement\n");
@@ -269,22 +247,23 @@ void onPacketReceive(Packet packetReceive){
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 6) {
-        printf("Usage: %s <server IP> <port> <SYNCHRONIZE|RESTORE> <repository> <config extension file>\n", argv[0]);
+    if (argc != 2) {
+        printf("Usage: %s <path/to/client.conf>\n", argv[0]);
         return 1;
     }
 
-    char *serverIP = argv[1];
-    int port = atoi(argv[2]);
+    readConfigClientFile(argv[1], &configClient);
 
-    if(strcmp(argv[3], "SYNCHRONIZE") && strcmp(argv[3], "RESTORE")){
-        printf("Usage: %s <server IP> <port> <SYNCHRONIZE|RESTORE> <repository> <config extension file>\n", argv[0]);
-        return 1;
+    for(int i = 0; i < configClient.numExtensions; i++){
+        printf("new extension : %s\n", configClient.extensions[i]);
     }
 
-    strcpy(mod, argv[3]);
-    strcpy(repository, argv[4]);
-    strcpy(extensionsFile, argv[5]);
+    for(int i = 0; i < configClient.numRepositories; i++){
+        printf("new repository : %s\n", configClient.repositories[i]);
+    }
+
+    printf("ip serveur : %s\n", configClient.serverIP);
+    printf("port serveur : %d\n", configClient.port);
 
     if (signal(SIGINT, handle_ctrl_c) == SIG_ERR) {
         fprintf(stderr, "Impossible de capturer SIGINT\n");
@@ -324,8 +303,8 @@ int main(int argc, char *argv[]) {
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr(serverIP);
-    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = inet_addr(configClient.serverIP);
+    server_addr.sin_port = htons(configClient.port);
 
     // Connecter la socket du client au serveur
     if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
