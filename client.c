@@ -47,7 +47,7 @@ void onPacketReceive(Packet packetReceive){
             readClientCredentials(".api", &packetResponse.apiPacket);
             printf("API : %s\n", packetResponse.apiPacket.api);
             printf("Secret : %s\n", packetResponse.apiPacket.secret);
-           
+
             packetResponse.flag = API_RESPONSE;
             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
             break;

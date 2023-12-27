@@ -13,6 +13,8 @@
 #include "lib/utils.h"
 #include "lib/readConfigFile.h"
 
+#include "lib/aes.h"
+
 #define PORT 12347
 
 
@@ -148,7 +150,11 @@ void handle_client(SSL *ssl) {
                     break;
                 case CONTENT_FILE:
                     // Écrire les données dans le fichier
-                    fwrite(packetReceive.fileContent.content, 1, packetReceive.fileContent.size, fichier);
+                    char crypted[2048];
+                    uint8_t key[32];
+                    generateKey(authPacket.apiPacket.secret, key);
+                    encryptData(packetReceive.fileContent.content, packetReceive.fileContent.size, crypted, key);
+                    fwrite(crypted, 1, strlen(crypted), fichier);
                     break;
                 case FINISH_FILE:
                     fclose(fichier);
@@ -177,59 +183,70 @@ void handle_client(SSL *ssl) {
                     break;
 
                 case REQUEST_FILE:  
-                    printf("REQUEST_FILE received\n");
-                    writeToLog("REQUEST_FILE received");
-                    // envoi de l'entête
-                    packetResponse.flag = HEADER_FILE;
-                    memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
-                    SSL_write(ssl, &packetResponse, sizeof(packetResponse));
-
-
-                    writeToLog("send HEADER_FILE");
-                    writeToLog(packetResponse.fileInfo.path);
-
-                    const char *slug = selectSlugByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
-                    memcpy(packetResponse.fileInfo.slug, slug, strlen(slug) + 1);
-                    // envoi du contenu
-
-                    char filePath[1024];
-                    snprintf(filePath, sizeof(filePath), "server_data/%s", packetResponse.fileInfo.slug);
-
-                    fichier = fopen(filePath, "rb");
-                    writeToLog("open file");
-                    writeToLog(filePath);
-                    if (fichier == NULL) {
-                        writeToLog("Erreur lors de l'ouverture du fichier");
-                        perror("Erreur lors de l'ouverture du fichier");
-                    }
-                    unsigned char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(unsigned char));
-
-                    if (buffer == NULL) {
-                        writeToLog("Erreur d'allocation mémoire");
-                        perror("Erreur d'allocation mémoire");
-                        fclose(fichier);
-                    }
-
-                    size_t octetsLus;
-                    while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
-                        for (size_t i = 0; i < octetsLus; i++) {
-                            packetResponse.fileContent.content[i] = buffer[i];
-                        }
-                        packetResponse.flag = CONTENT_FILE;
-                        packetResponse.fileContent.size = octetsLus;
+                    if(1 == 1){
+                        printf("REQUEST_FILE received\n");
+                        writeToLog("REQUEST_FILE received");
+                        // envoi de l'entête
+                        packetResponse.flag = HEADER_FILE;
+                        memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
-                        memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
-                        writeToLog("send CONTENT_FILE");
+
+
+                        writeToLog("send HEADER_FILE");
+                        writeToLog(packetResponse.fileInfo.path);
+
+                        const char *slug = selectSlugByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
+                        memcpy(packetResponse.fileInfo.slug, slug, strlen(slug) + 1);
+                        // envoi du contenu
+
+                        char filePath[1024];
+                        snprintf(filePath, sizeof(filePath), "server_data/%s", packetResponse.fileInfo.slug);
+
+                        fichier = fopen(filePath, "rb");
+                        writeToLog("open file");
+                        writeToLog(filePath);
+                        if (fichier == NULL) {
+                            writeToLog("Erreur lors de l'ouverture du fichier");
+                            perror("Erreur lors de l'ouverture du fichier");
+                        }
+                        unsigned char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(unsigned char));
+
+                        if (buffer == NULL) {
+                            writeToLog("Erreur d'allocation mémoire");
+                            perror("Erreur d'allocation mémoire");
+                            fclose(fichier);
+                        }
+
+                    
+                        uint8_t key[32];
+                        generateKey(authPacket.apiPacket.secret, key);
+                        
+
+                        size_t octetsLus;
+                        while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
+                            char decrypted[2048];
+                            for (size_t i = 0; i < octetsLus; i++) {
+                                packetResponse.fileContent.content[i] = buffer[i];
+                            }
+                            decryptData(packetResponse.fileContent.content, strlen(packetResponse.fileContent.content), decrypted, key);
+                            memcpy(packetResponse.fileContent.content, decrypted, strlen(decrypted) + 1);
+                            packetResponse.flag = CONTENT_FILE;
+                            packetResponse.fileContent.size = octetsLus;
+                            SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                            memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
+                            writeToLog("send CONTENT_FILE");
+                        }
+
+                        free(buffer); // Libérer la mémoire du tampon
+                        fclose(fichier);
+
+                        // envoi d'un flag pour signaler la fin du fichier
+                        packetResponse.flag = FINISH_FILE;
+                        SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                        printf("envoi fini\n");
+                        writeToLog("send FINISH_FILE");
                     }
-
-                    free(buffer); // Libérer la mémoire du tampon
-                    fclose(fichier);
-
-                    // envoi d'un flag pour signaler la fin du fichier
-                    packetResponse.flag = FINISH_FILE;
-                    SSL_write(ssl, &packetResponse, sizeof(packetResponse));
-                    printf("envoi fini\n");
-                    writeToLog("send FINISH_FILE");
+                    
                     break;
 
                 case REQUEST_RESTORE:
