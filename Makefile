@@ -15,9 +15,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra
 
 # Bibliothèques nécessaires
-LIBS_SERVER = -lssl -lcrypto -lsqlite3 lib/find.c lib/sqlite.c lib/utils.c
+LIBS_SERVER = -lssl -lcrypto -I/usr/include/postgresql -lpq lib/postgresql.c lib/find.c lib/utils.c lib/libbcrypt/bcrypt.a
 LIBS_CLIENT =  -lssl -lcrypto lib/find.c lib/utils.c
-LIBS_API = -lssl -lcrypto -lsqlite3 lib/sqlite.c lib/utils.c
+LIBS_API = -lssl -lcrypto -I/usr/include/postgresql -lpq lib/postgresql.c lib/utils.c lib/libbcrypt/bcrypt.a
 
 # Sources pour le serveur
 SERVER_SRCS = server.c

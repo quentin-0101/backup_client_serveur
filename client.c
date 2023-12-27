@@ -53,16 +53,37 @@ void onPacketReceive(Packet packetReceive){
 
         case REQUEST_USER_API:
             FILE *api_file = fopen(".api", "r");
+
             if (api_file == NULL) {
                 perror("Erreur lors de l'ouverture du fichier");
-                return 0;
+                return 1;
             }
 
-            size_t taille_lue = fread(packetResponse.apiPacket.api, 1, sizeof(packetResponse.apiPacket.api) - 1, api_file);
-            packetResponse.apiPacket.api[taille_lue] = '\0';
+            char api_key[2048];
+            char api_value[2048];
+            char secret_key[2048];
+            char secret_value[2048];
+
+            // Lire le fichier .api ligne par ligne
+            while (fscanf(api_file, "%2047[^=]=%2047[^\n]\n", api_key, api_value) == 2) {
+                // Supprimer le caractère newline à la fin de la clé et de la valeur
+                api_key[strcspn(api_key, "\n")] = '\0';
+                api_value[strcspn(api_value, "\n")] = '\0';
+
+                // Utiliser strcmp pour vérifier la clé et stocker la valeur correspondante
+                if (strcmp(api_key, "api") == 0) {
+                    strcpy(packetResponse.apiPacket.api, api_value);
+                } else if (strcmp(api_key, "secret") == 0) {
+                    strcpy(packetResponse.apiPacket.secret, api_value);
+                }
+            }
+
             fclose(api_file);
+
+            // Afficher les valeurs lues
+            printf("API : %s\n", packetResponse.apiPacket.api);
+            printf("Secret : %s\n", packetResponse.apiPacket.secret);
            
-            printf("Contenu du fichier :\n%s\n", packetResponse.apiPacket.api);
             packetResponse.flag = API_RESPONSE;
             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
             break;

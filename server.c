@@ -9,7 +9,7 @@
 #include "objects/packet.h"
 #include "objects/apiPacket.h"
 
-#include "lib/sqlite.h"
+#include "lib/postgresql.h"
 #include "lib/utils.h"
 
 #define PORT 12347
@@ -31,17 +31,16 @@ void handle_client(SSL *ssl) {
         }
     }
 
-    sqlite3 *db;
-    int rc = sqlite3_open("sqlite/database.db", &db);
-    writeToLog("the database is open");
-
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
-        writeToLog("error when open database");
-        writeToLog( sqlite3_errmsg(db));
-
-        sqlite3_close(db);
+    const char *conninfo = "dbname=backup user=postgres password=password host=127.0.0.1 port=5431";
+    PGconn *conn = PQconnectdb(conninfo);
+    if (PQstatus(conn) != CONNECTION_OK) {
+        fprintf(stderr, "La connexion a échoué : %s", PQerrorMessage(conn));
+        writeToLog("database connexion failed");
+        writeToLog(PQerrorMessage(conn));
+        PQfinish(conn);
+        return 1;
     }
+    writeToLog("connected to the database");
 
     Packet packet;
     packet.flag = REQUEST_USER_API;
@@ -50,16 +49,24 @@ void handle_client(SSL *ssl) {
     Packet authPacket;
     int bytes_received = SSL_read(ssl, &authPacket, sizeof(authPacket));
     if(bytes_received > 0){
-        if(authPacket.flag == API_RESPONSE && authenticateUser(db, authPacket.apiPacket.api) == 1){
-            // si l'api est correcte, on vérifie l'ip associé afin d'éviter un potentiel vol d'api
-            if(strcmp(ip_str, getIPByUserAPI(db, authPacket.apiPacket.api)) == 0){
-                Packet packet;
-                packet.flag = AUTH_SUCCESS;
-                SSL_write(ssl, &packet, sizeof(packet));
-            } else {
-                writeToLog("Connection from unauthorized api. Closing the connection.");
+        if(authPacket.flag == API_RESPONSE){
+
+            char *hash = getSecret(conn, authPacket.apiPacket.api);
+            if(hash == NULL){
+                writeToLog("API key not found. Closing the connection.");
                 exit(EXIT_SUCCESS);
+            } else {
+                int ret = bcrypt_checkpw(authPacket.apiPacket.secret, hash);
+                if(ret == 0 && strcmp(ip_str, getIPByUserAPI(conn, authPacket.apiPacket.api)) == 0){ // si l'api est correcte, on vérifie l'ip associé afin d'éviter un potentiel vol d'api
+                    Packet packet;
+                    packet.flag = AUTH_SUCCESS;
+                    SSL_write(ssl, &packet, sizeof(packet));
+                } else {
+                    writeToLog("Connection from unauthorized api. Closing the connection.");
+                    exit(EXIT_SUCCESS);
+                }
             }
+
         } else {
             writeToLog("Connection from unauthorized api. Closing the connection.");
             exit(EXIT_SUCCESS);
@@ -90,7 +97,7 @@ void handle_client(SSL *ssl) {
                     printf("un client vient de se déconnecter\n");
                     writeToLog("Client disconnected");
                     writeToLog(ip_str);
-                    sqlite3_close(db);
+                    PQfinish(conn);
                     exit(EXIT_SUCCESS);
                     break;
                 
@@ -101,7 +108,7 @@ void handle_client(SSL *ssl) {
                     printf("last modification : %s\n", packetReceive.fileInfo.lastModification);
                     printf("\n");
 
-                    const char *lastDateUpdate =  selectLastModificationFromFileByPath(db, packetReceive.fileInfo.path);
+                    const char *lastDateUpdate =  selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path);
 
                     // le fichier n'est pas connu de la base : il faut le sauvegarder
                     if(lastDateUpdate == NULL){
@@ -124,8 +131,8 @@ void handle_client(SSL *ssl) {
 
                 case HEADER_FILE:
                     generateRandomKey(packetReceive.fileInfo.slug, 32);
-                    insertNewFile(db, &packetReceive, authPacket.apiPacket.api);
-                    updateFile(db, &packetReceive);
+                    insertNewFile(conn, &packetReceive, authPacket.apiPacket.api);
+                    updateFile(conn, &packetReceive);
                     printf("open file\n");
                     writeToLog("FILE RECEIVE");
                     writeToLog(packetReceive.fileInfo.path);
@@ -148,7 +155,7 @@ void handle_client(SSL *ssl) {
                     if(1 == 1){
                         writeToLog("REQUEST_ALL_PATH received");
                         int rowCount = 0;
-                        char **results = selectAllPathFromFile(db, &rowCount, authPacket.apiPacket.api);
+                        char **results = selectAllPathFromFile(conn, &rowCount, authPacket.apiPacket.api);
                         for(int i = 0; i < rowCount; i++){
                             packetResponse.flag = RESPONSE_PATH;
                             memcpy(packetResponse.fileInfo.path, results[i], strlen(results[i]) + 1);
@@ -175,7 +182,7 @@ void handle_client(SSL *ssl) {
                     writeToLog("send HEADER_FILE");
                     writeToLog(packetResponse.fileInfo.path);
 
-                    const char *slug = selectSlugByPath(db, packetReceive.fileInfo.path, authPacket.apiPacket.api);
+                    const char *slug = selectSlugByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
                     memcpy(packetResponse.fileInfo.slug, slug, strlen(slug) + 1);
                     // envoi du contenu
 
@@ -222,10 +229,10 @@ void handle_client(SSL *ssl) {
                 case REQUEST_RESTORE:
                     writeToLog("received REQUEST_RESTORE");
                     if(1 == 1){
-                        int count = selectCountFile(db);
+                        int count = selectCountFile(conn, authPacket.apiPacket.api);
                         Restore restore;
                         restore.restorePath = malloc(sizeof(RestorePath) * count);
-                        selectAllPath(db, &restore, authPacket.apiPacket.api);
+                        selectAllPath(conn, &restore, authPacket.apiPacket.api);
                         for(int i = 0; i < count; i++){
                             packetResponse.flag = REQUEST_FILE_RESTORE;
                             memcpy(packetResponse.fileInfo.path, restore.restorePath[i].path, strlen(restore.restorePath[i].path) + 1);
@@ -255,7 +262,6 @@ void handle_client(SSL *ssl) {
         //    sqlite3_close(db);
             break;
         }
-        //sqlite3_close(db);
             
        // free(packetReceive);
     }
@@ -267,20 +273,6 @@ void handle_client(SSL *ssl) {
 
 
 int main() {
-    sqlite3 *db;
-    int rc = sqlite3_open("sqlite/database.db", &db);
-
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Impossible d'ouvrir la base de données: %s\n", sqlite3_errmsg(db));
-        writeToLog("error when open database");
-        writeToLog(sqlite3_errmsg(db));
-        sqlite3_close(db);
-    }
-
-    // creation de la base si elle n'existe pas
-    createDatabase(db, rc);
-    sqlite3_close(db);
-
 
     SSL_CTX *ctx;
     int server_socket, client_socket;

@@ -3,6 +3,7 @@
 int createDatabase(PGconn *conn) {
     char *createUsersTableSQL = "CREATE TABLE IF NOT EXISTS users ("
                                 "api TEXT PRIMARY KEY,"
+                                "secret TEXT,"
                                 "ip TEXT UNIQUE"
                                 ");";
 
@@ -304,8 +305,8 @@ int selectAllPath(PGconn *conn, Restore *restore, const char *user_api) {
     return 0;
 }
 
-int authenticateUser(PGconn *conn, const char *user_api) {
-    const char *select_sql = "SELECT api FROM users WHERE api = $1";
+char* getSecret(PGconn *conn, const char *user_api) {
+    const char *select_sql = "SELECT secret FROM users WHERE api = $1";
     const char *paramValues[1] = {user_api};
     const int paramLengths[1] = {-1};
     const int paramFormats[1] = {0};
@@ -315,19 +316,21 @@ int authenticateUser(PGconn *conn, const char *user_api) {
     if (PQresultStatus(result) != PGRES_TUPLES_OK) {
         fprintf(stderr, "Error executing SELECT statement: %s\n", PQerrorMessage(conn));
         PQclear(result);
-        return -1;
+        return NULL;  // Retournez NULL en cas d'erreur
     }
 
     int rowCount = PQntuples(result);
 
-    PQclear(result);
-
     if (rowCount > 0) {
-        printf("L'authentification a réussi pour l'utilisateur avec API : %s\n", user_api);
-        return 1;
+        const char *hashedApi = PQgetvalue(result, 0, 0);
+        char *hashedApiCopy = strdup(hashedApi);
+
+        PQclear(result);
+        return hashedApiCopy;
     } else {
         printf("L'authentification a échoué. Aucun utilisateur trouvé avec API : %s\n", user_api);
-        return 0;
+        PQclear(result);
+        return NULL;
     }
 }
 
@@ -361,13 +364,13 @@ char *getIPByUserAPI(PGconn *conn, const char *user_api) {
     }
 }
 
-int insertUser(PGconn *conn, const char *api, const char *ip) {
-    const char *insert_sql = "INSERT INTO users (api, ip) VALUES ($1, $2)";
-    const char *paramValues[2] = {api, ip};
-    const int paramLengths[2] = {-1, -1};
-    const int paramFormats[2] = {0, 0};
+int insertUser(PGconn *conn, const char *api, const char *ip, const char *secret) {
+    const char *insert_sql = "INSERT INTO users (api, ip, secret) VALUES ($1, $2, $3)";
+    const char *paramValues[3] = {api, ip, secret};
+    const int paramLengths[3] = {-1, -1, -1};
+    const int paramFormats[3] = {0, 0, 0};
 
-    PGresult *result = PQexecParams(conn, insert_sql, 2, NULL, paramValues, paramLengths, paramFormats, 0);
+    PGresult *result = PQexecParams(conn, insert_sql, 3, NULL, paramValues, paramLengths, paramFormats, 0);
 
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
         fprintf(stderr, "Error executing INSERT statement: %s\n", PQerrorMessage(conn));

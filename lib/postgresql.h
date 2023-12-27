@@ -18,9 +18,9 @@ int deleteFileWithFilePath(PGconn *conn, const char *filePath, const char *user_
 char **selectAllPathFromFile(PGconn *conn, int *rowCount, const char *user_api);
 const char *selectSlugByPath(PGconn *conn, const char *path, const char *user_api);
 int selectAllPath(PGconn *conn, Restore *restore, const char *user_api);
-int authenticateUser(PGconn *conn, const char *user_api);
+char* getSecret(PGconn *conn, const char *user_api);
 char *getIPByUserAPI(PGconn *conn, const char *user_api);
-int insertUser(PGconn *conn, const char *api, const char *ip);
+int insertUser(PGconn *conn, const char *api, const char *ip, const char *secret);
 int updateIPByAPI(PGconn *conn, const char *api, const char *newIP);
 
 #endif

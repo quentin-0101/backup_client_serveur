@@ -5,6 +5,7 @@
 
 typedef struct ApiPacket {
     char api[2048];
+    char secret[2048];
 } __attribute__((packed)) ApiPacket;
 
 #endif // PACKET_H
