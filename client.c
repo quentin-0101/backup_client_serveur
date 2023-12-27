@@ -37,16 +37,8 @@ void handle_ctrl_c() {
 }
 
 void onPacketReceive(Packet packetReceive){
-    
-
-    char **extensions = NULL;
-    int numExtensions;
-  
-   
     Packet packetResponse;
     FILE *fichier;
-    
-
 
     switch (packetReceive.flag)
     {
