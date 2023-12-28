@@ -80,3 +80,36 @@ void generateRandomKey(char *apiKey, size_t length) {
         apiKey[i] = charset[apiKey[i] % charsetSize];
     }
 }
+
+char* calculateMD5(const char *filename) {
+    int BUFFER_SIZE = 1024;
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Error opening file");
+        exit(EXIT_FAILURE);
+    }
+
+    MD5_CTX mdContext;
+    MD5_Init(&mdContext);
+
+    unsigned char data[BUFFER_SIZE];
+    size_t bytesRead;
+
+    while ((bytesRead = fread(data, 1, BUFFER_SIZE, file)) != 0) {
+        MD5_Update(&mdContext, data, bytesRead);
+    }
+
+    MD5_Final(data, &mdContext);
+
+    fclose(file);
+
+    // Allouer dynamiquement de la mémoire pour la chaîne de caractères
+    char *md5sum = (char *)malloc(2 * MD5_DIGEST_LENGTH + 1);
+
+    // Convertir le hash en chaîne hexadécimale
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
+        sprintf(md5sum + 2 * i, "%02x", data[i]);
+    }
+
+    return md5sum;
+}

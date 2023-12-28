@@ -76,7 +76,8 @@ void onPacketReceive(Packet packetReceive){
                         if(paths[i] != NULL){
                             printf("envoi : %s\n", paths[i]);
 
-                            char *lastModification = getLastUpdated(paths[i]);
+                            char *lastModification = calculateMD5(paths[i]); //getLastUpdated(paths[i]);
+                            printf("hash : %s\n", lastModification);
                             packetResponse.flag = FILE_INFO;
                             memcpy(packetResponse.fileInfo.path, paths[i], strlen(paths[i]) + 1);
                             memcpy(packetResponse.fileInfo.lastModification, lastModification, strlen(lastModification) + 1);
@@ -118,7 +119,7 @@ void onPacketReceive(Packet packetReceive){
                 // envoi de l'entête du fichier (path, date de modification)
                 packetResponse.flag = HEADER_FILE;
                 memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
-                char *lastModification = getLastUpdated(packetResponse.fileInfo.path);
+                char *lastModification =  calculateMD5(packetResponse.fileInfo.path); // getLastUpdated(packetResponse.fileInfo.path);
                 memcpy(packetResponse.fileInfo.lastModification, lastModification, strlen(lastModification) + 1);
                 SSL_write(ssl, &packetResponse, sizeof(packetResponse));
 

@@ -81,6 +81,9 @@ void handle_client(SSL *ssl) {
         }
     }
 
+    char savePath[1024];
+    char hashReceivedCurrentFile[1024];
+
     while (1) {
         // Recevoir un message du client
         Packet packetReceive;
@@ -149,6 +152,8 @@ void handle_client(SSL *ssl) {
                         printf("ap\n");
                         if(exist == NULL){
                             generateRandomKey(packetReceive.fileInfo.slug, 32);
+                            printf("insertion en base : \n");
+                            printf("hash : %s\n", packetReceive.fileInfo.lastModification);
                             insertNewFile(conn, &packetReceive, authPacket.apiPacket.api);
                         } else {
                             char *slug = selectSlugByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
@@ -158,10 +163,12 @@ void handle_client(SSL *ssl) {
                             memcpy(packetReceive.fileInfo.slug, slug, strlen(slug) + 1);
                             updateFile(conn, &packetReceive);
                         }
+                        memcpy(hashReceivedCurrentFile, packetReceive.fileInfo.lastModification, strlen(packetReceive.fileInfo.lastModification) + 1);
                     
                         printf("open file\n");
                         writeToLog("FILE RECEIVE");
                         writeToLog(packetReceive.fileInfo.path);
+                        memcpy(savePath, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
 
                         snprintf(slug, sizeof(slug), "server_data/%s", packetReceive.fileInfo.slug);
 
@@ -187,6 +194,23 @@ void handle_client(SSL *ssl) {
                     fclose(fichier);
                     printf("close file");
                     writeToLog("CLOSE FILE");
+
+
+                    char *slug = selectSlugByPath(conn, savePath, authPacket.apiPacket.api);
+                    char fullPathServer[2048];
+                    snprintf(fullPathServer, sizeof(fullPathServer), "server_data/%s", slug);
+                    char *hash = calculateMD5(fullPathServer);
+
+                    if(strcmp(hash, hashReceivedCurrentFile) == 0){
+                        printf("le fichier reçu est complet\n");
+                        writeToLog("the file received is complete");
+                        writeToLog
+                    } else {
+                        printf("il y a eu une erreur lors du trasnfert pour le fichier %s\n", savePath);
+                        writeToLog("error : file not completly received");
+                    }
+                    writeToLog(savePath);
+
                     break;
 
 
