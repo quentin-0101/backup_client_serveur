@@ -204,7 +204,6 @@ void handle_client(SSL *ssl) {
                     if(strcmp(hash, hashReceivedCurrentFile) == 0){
                         printf("le fichier reçu est complet\n");
                         writeToLog("the file received is complete");
-                        writeToLog
                     } else {
                         printf("il y a eu une erreur lors du trasnfert pour le fichier %s\n", savePath);
                         writeToLog("error : file not completly received");
