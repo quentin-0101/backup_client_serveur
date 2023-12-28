@@ -249,7 +249,7 @@ void handle_client(SSL *ssl) {
                     
               //          uint8_t key[32];
               //          generateKey(authPacket.apiPacket.secret, key);
-
+                        writeToLog("send CONTENT_FILE start");
                         size_t octetsLus;
                         while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
                 //            char decrypted[2048];
@@ -263,8 +263,9 @@ void handle_client(SSL *ssl) {
                             packetResponse.fileContent.size = octetsLus;
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                             memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
-                            writeToLog("send CONTENT_FILE");
+                        //    writeToLog("send CONTENT_FILE");
                         }
+                        writeToLog("send CONTENT_FILE end");
 
                         free(buffer); // Libérer la mémoire du tampon
                         fclose(fichier);
