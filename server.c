@@ -80,8 +80,6 @@ void handle_client(SSL *ssl) {
             exit(EXIT_SUCCESS);
         }
     }
-    
-    
 
     while (1) {
         // Recevoir un message du client
@@ -116,7 +114,7 @@ void handle_client(SSL *ssl) {
                     printf("last modification : %s\n", packetReceive.fileInfo.lastModification);
                     printf("\n");
 
-                    const char *lastDateUpdate =  selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path);
+                    const char *lastDateUpdate =  selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
 
                     // le fichier n'est pas connu de la base : il faut le sauvegarder
                     if(lastDateUpdate == NULL){
@@ -133,28 +131,57 @@ void handle_client(SSL *ssl) {
                             memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                             writeToLog("REQUEST FILE");
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                            
                         }
                     }
                     break;
 
                 case HEADER_FILE:
-                    generateRandomKey(packetReceive.fileInfo.slug, 32);
-                    insertNewFile(conn, &packetReceive, authPacket.apiPacket.api);
-                    updateFile(conn, &packetReceive);
-                    printf("open file\n");
-                    writeToLog("FILE RECEIVE");
-                    writeToLog(packetReceive.fileInfo.path);
+                    
+                    // récupérer le nom de l'ancien fichier, et le supprimer
+                    
 
-                    snprintf(slug, sizeof(slug), "server_data/%s", packetReceive.fileInfo.slug);
-                    fichier = fopen(slug, "wb");
+                   
+                //    generateRandomIV(packetReceive.fileInfo.iv, 16);
+                    if(1 == 1){
+                        printf("av\n");
+                        const char *exist = selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
+                        printf("ap\n");
+                        if(exist == NULL){
+                            generateRandomKey(packetReceive.fileInfo.slug, 32);
+                            insertNewFile(conn, &packetReceive, authPacket.apiPacket.api);
+                        } else {
+                            char *slug = selectSlugByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
+                            char fullPathServer[2048];
+                            snprintf(fullPathServer, sizeof(fullPathServer), "server_data/%s", slug);
+                            remove(fullPathServer);
+                            memcpy(packetReceive.fileInfo.slug, slug, strlen(slug) + 1);
+                            updateFile(conn, &packetReceive);
+                        }
+                    
+                        printf("open file\n");
+                        writeToLog("FILE RECEIVE");
+                        writeToLog(packetReceive.fileInfo.path);
+
+                        snprintf(slug, sizeof(slug), "server_data/%s", packetReceive.fileInfo.slug);
+
+                        fichier = fopen(slug, "wb");
+                    }
+                    
                     break;
                 case CONTENT_FILE:
                     // Écrire les données dans le fichier
-                    char crypted[2048];
-                    uint8_t key[32];
-                    generateKey(authPacket.apiPacket.secret, key);
-                    encryptData(packetReceive.fileContent.content, packetReceive.fileContent.size, crypted, key);
-                    fwrite(crypted, 1, strlen(crypted), fichier);
+                  //  char crypted[2048];
+                  //  uint8_t key[32];
+                  //  generateKey(authPacket.apiPacket.secret, key);
+                  //  encryptData(packetReceive.fileContent.content, packetReceive.fileContent.size, crypted, key);
+                  //  printf("encrypted data : %s\n", crypted);
+
+                  //  char decrypted[2048];
+                  //  decryptData(crypted, strlen(crypted), decrypted, key);
+                  //  printf("decrypted : %s\n", decrypted);
+
+                    fwrite(packetReceive.fileContent.content, packetReceive.fileContent.size, 1, fichier);
                     break;
                 case FINISH_FILE:
                     fclose(fichier);
@@ -191,6 +218,8 @@ void handle_client(SSL *ssl) {
                         memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
 
+                        
+
 
                         writeToLog("send HEADER_FILE");
                         writeToLog(packetResponse.fileInfo.path);
@@ -218,18 +247,18 @@ void handle_client(SSL *ssl) {
                         }
 
                     
-                        uint8_t key[32];
-                        generateKey(authPacket.apiPacket.secret, key);
-                        
+              //          uint8_t key[32];
+              //          generateKey(authPacket.apiPacket.secret, key);
 
                         size_t octetsLus;
                         while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
-                            char decrypted[2048];
+                //            char decrypted[2048];
                             for (size_t i = 0; i < octetsLus; i++) {
                                 packetResponse.fileContent.content[i] = buffer[i];
                             }
-                            decryptData(packetResponse.fileContent.content, strlen(packetResponse.fileContent.content), decrypted, key);
-                            memcpy(packetResponse.fileContent.content, decrypted, strlen(decrypted) + 1);
+                 //           decryptData(packetResponse.fileContent.content, strlen(packetResponse.fileContent.content), decrypted, key);
+                 //           printf("decrypted : %s\n", decrypted);
+                 //           memcpy(packetResponse.fileContent.content, decrypted, strlen(decrypted) + 1);
                             packetResponse.flag = CONTENT_FILE;
                             packetResponse.fileContent.size = octetsLus;
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));

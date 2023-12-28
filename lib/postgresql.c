@@ -37,12 +37,19 @@ int createDatabase(PGconn *conn) {
     PQclear(result);
 
     printf("The database has been successfully created.\n");
+    writeToLog("The database has been successfully created.");
     return 0;
 }
 
-const char *selectLastModificationFromFileByPath(PGconn *conn, const char *path) {
-    const char *select_sql = "SELECT lastModification FROM file WHERE path = $1;";
-    PGresult *result = PQexecParams(conn, select_sql, 1, NULL, &path, NULL, NULL, 0);
+const char *selectLastModificationFromFileByPath(PGconn *conn, const char *path, const char *api) {
+    const char *select_sql = "SELECT lastModification FROM file WHERE path = $1 AND user_api = $2;";
+    
+    // Set up parameter values
+    const char *paramValues[2] = {path, api};
+    const int paramLengths[2] = {-1, -1};  // Use -1 for null-terminated strings
+    const int paramFormats[2] = {0, 0};    // 0 means text format
+
+    PGresult *result = PQexecParams(conn, select_sql, 2, NULL, paramValues, paramLengths, paramFormats, 0);
 
     if (PQresultStatus(result) != PGRES_TUPLES_OK) {
         fprintf(stderr, "Error executing SELECT statement: %s\n", PQerrorMessage(conn));
@@ -59,6 +66,7 @@ const char *selectLastModificationFromFileByPath(PGconn *conn, const char *path)
     PQclear(result);
     return NULL;
 }
+
 
 int insertNewFile(PGconn *conn, Packet *packet, const char *user_api) {
     PGresult *result = PQexec(conn, "BEGIN TRANSACTION");
@@ -399,6 +407,7 @@ int updateIPByAPI(PGconn *conn, const char *api, const char *newIP) {
     PQclear(res);
     return 0;
 }
+
 
 /*
 int main() {

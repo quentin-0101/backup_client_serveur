@@ -16,7 +16,7 @@ void generateRandomIV(uint8_t *iv, size_t ivSize);
 void generateKey(const char *input, uint8_t key[]);
 void encryptFile(const char *inputFilename, const char *outputFilename, const uint8_t *key);
 void decryptFile(const char *inputFilename, const char *outputFilename, const uint8_t *key);
-void decryptData(const char *inputData, size_t dataSize, char *outputData, const uint8_t *key);
 void encryptData(const char *inputData, size_t dataSize, char *outputData, const uint8_t *key);
+void decryptData(const char *inputData, size_t dataSize, char *outputData, const uint8_t *key);
 
 #endif

@@ -8,9 +8,10 @@
 #include "../objects/packet.h"
 #include "../objects/restore.h"
 #include "utils.h"
+#include <stdint.h>
 
 int createDatabase(PGconn *conn);
-const char *selectLastModificationFromFileByPath(PGconn *conn, const char *path);
+const char *selectLastModificationFromFileByPath(PGconn *conn, const char *path, const char *api);
 int insertNewFile(PGconn *conn, Packet *packet, const char *user_api);
 int updateFile(PGconn *conn, Packet *packet);
 int selectCountFile(PGconn *conn, const char *user_api);

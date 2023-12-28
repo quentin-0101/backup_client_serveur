@@ -1,5 +1,11 @@
 #include "aes.h"
 
+uint8_t content[BUFFER_SIZE];
+const uint8_t commonIV[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+const uint8_t commonKey[] = {0x60, 0x3d, 0xeb, 0x10, 0x15, 0xca, 0x71, 0xbe, 0x2b, 0x73, 0xae, 0xf0, 0x85, 0x7d, 0x77, 0x81,
+                      0x1f, 0x35, 0x2c, 0x07, 0x3b, 0x61, 0x08, 0xd7, 0x2d, 0x98, 0x10, 0xa3, 0x09, 0x14, 0xdf, 0xf4};
+
 
 void generateRandomIV(uint8_t *iv, size_t ivSize) {
     if (RAND_bytes(iv, ivSize) != 1) {
@@ -94,65 +100,46 @@ void generateKey(const char *input, uint8_t key[]) {
 }
 
 void encryptData(const char *inputData, size_t dataSize, char *outputData, const uint8_t *key) {
-    uint8_t buffer[BUFFER_SIZE];
     struct AES_ctx ctx;
     size_t ivSize = AES_BLOCKLEN;
-    uint8_t *iv = (uint8_t *)malloc(ivSize);
-    if (iv == NULL) {
-        fprintf(stderr, "Error allocating memory for IV.\n");
-        exit(EXIT_FAILURE);
-    }
 
-    generateRandomIV(iv, ivSize);
-    memcpy(outputData, iv, ivSize); // Copy IV to the beginning of the output buffer
+    AES_init_ctx_iv(&ctx, commonKey, commonIV);
 
-    AES_init_ctx_iv(&ctx, key, iv);
+    // Copy IV to the beginning of the output buffer
+    memcpy(outputData, commonIV, ivSize);
 
     size_t remainingData = dataSize;
     size_t offset = 0;
 
     while (remainingData > 0) {
         size_t blockSize = (remainingData < BUFFER_SIZE) ? remainingData : BUFFER_SIZE;
-        memcpy(buffer, inputData + offset, blockSize);
-        AES_CBC_encrypt_buffer(&ctx, buffer, blockSize);
-        memcpy(outputData + offset + ivSize, buffer, blockSize);
+        memcpy(content, inputData + offset, blockSize);
+        AES_CBC_encrypt_buffer(&ctx, content, blockSize);
+        memcpy(outputData + offset + ivSize, content, blockSize);
 
         remainingData -= blockSize;
         offset += blockSize;
     }
-
-    free(iv);
 }
 
 void decryptData(const char *inputData, size_t dataSize, char *outputData, const uint8_t *key) {
-    uint8_t buffer[BUFFER_SIZE];
     struct AES_ctx ctx;
     size_t ivSize = AES_BLOCKLEN;
-    uint8_t *iv = (uint8_t *)malloc(ivSize);
-    if (iv == NULL) {
-        fprintf(stderr, "Error allocating memory for IV.\n");
-        exit(EXIT_FAILURE);
-    }
 
-    // Extract IV from the input data
-    memcpy(iv, inputData, ivSize);
-
-    AES_init_ctx_iv(&ctx, key, iv);
+    AES_init_ctx_iv(&ctx, commonKey, commonIV);
 
     size_t remainingData = dataSize - ivSize;
     size_t offset = 0;
 
     while (remainingData > 0) {
         size_t blockSize = (remainingData < BUFFER_SIZE) ? remainingData : BUFFER_SIZE;
-        memcpy(buffer, inputData + offset + ivSize, blockSize);
-        AES_CBC_decrypt_buffer(&ctx, buffer, blockSize);
-        memcpy(outputData + offset, buffer, blockSize);
+        memcpy(content, inputData + offset + ivSize, blockSize);
+        AES_CBC_decrypt_buffer(&ctx, content, blockSize);
+        memcpy(outputData + offset, content, blockSize);
 
         remainingData -= blockSize;
         offset += blockSize;
     }
-
-    free(iv);
 }
 
 /*
