@@ -5,7 +5,10 @@
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
-#define BLOCK_SIZE 2048
+#include <unistd.h>
+
+#define BLOCK_SIZE 4096
+
 
 
 char* encrypt(const char *plaintext, const char *key, const unsigned char *iv) {
@@ -33,11 +36,10 @@ char* encrypt(const char *plaintext, const char *key, const unsigned char *iv) {
     memcpy(result, iv, iv_len);
     memcpy(result + iv_len, ciphertext, out_size);
 
-    free(ciphertext);
+    //free(ciphertext);
 
     return result;
 }
-
 
 char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) {
     const EVP_CIPHER *cipher = EVP_aes_256_cbc();
@@ -48,33 +50,26 @@ char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) 
     EVP_DecryptInit_ex(ctx, cipher, NULL, (unsigned char *)key, iv);
 
     const unsigned char *ciphertext_data = (const unsigned char *)(ciphertext + iv_len);
-    int ciphertext_len = strlen(ciphertext + iv_len);
-
-    unsigned char plaintext_block[BLOCK_SIZE + EVP_CIPHER_block_size(cipher)];
+    int ciphertext_len = /* Use the correct length here */299;
 
     int len;
     int final_len;
-    int total_len = 0;
-    int buffer_size = 1024;  // Initial buffer size, adjust as needed
-    char *decrypted_text = (char *)malloc(buffer_size);
+    int buffer_size = ciphertext_len + EVP_CIPHER_block_size(cipher);
+    char *decrypted_text = (char *)malloc(buffer_size + 1); // Add space for the null terminator
 
-    EVP_DecryptUpdate(ctx, plaintext_block, &len, ciphertext_data, ciphertext_len);
+    if (!decrypted_text) {
+        fprintf(stderr, "Memory allocation error.\n");
+        EVP_CIPHER_CTX_free(ctx);
+        return NULL;
+    }
+
+    EVP_DecryptUpdate(ctx, (unsigned char *)decrypted_text, &len, ciphertext_data, ciphertext_len);
     final_len = 0;
-    EVP_DecryptFinal_ex(ctx, plaintext_block + len, &final_len);
+    EVP_DecryptFinal_ex(ctx, (unsigned char *)decrypted_text + len, &final_len);
 
     len += final_len;
 
-    // Resize the buffer if needed
-    if (total_len + len > buffer_size) {
-        buffer_size *= 2;
-        decrypted_text = (char *)realloc(decrypted_text, buffer_size);
-    }
-
-    // Copy the decrypted block to the result buffer
-    memcpy(decrypted_text + total_len, plaintext_block, len);
-    total_len += len;
-
-    decrypted_text[total_len] = '\0';  // Null-terminate the string
+    decrypted_text[len] = '\0';  // Null-terminate the string
 
     EVP_CIPHER_CTX_free(ctx);
 
@@ -88,21 +83,28 @@ void generateRandomIV(unsigned char *iv, size_t ivSize) {
         exit(EXIT_FAILURE);
     }
 }
-
 int main() {
-    const char *plaintext = "Bonjour test";
+    const char *plaintext = "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdeg";
     const char *key = "I7pGzM96PhZ0BHshb04BDWrO3ilRKFYA";
 
     char iv[32];
     generateRandomIV(iv, 32);
-
     
-
+  
     char *encrypted_content = encrypt(plaintext, key, iv);
-    printf("encrypted : %s\n", encrypted_content);
     
+    printf("encrypted : ");
+    for (int i = 0; i < strlen(encrypted_content); i++) {
+        printf("%02X", (unsigned char)encrypted_content[i]);
+    }
+    printf("\n");
+   
     char *decrypted = decrypt(encrypted_content, key, iv);
+    
     printf("decrypted : %s\n", decrypted);
+
+    free(decrypted);
+    free(encrypted_content);
 
     return 0;
 }

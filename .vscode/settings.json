@@ -3,6 +3,17 @@
         "ssl.h": "c",
         "err.h": "c",
         "find.h": "c",
-        "sqlite.h": "c"
+        "sqlite.h": "c",
+        "utils.h": "c",
+        "readconfigfile.h": "c",
+        "string.h": "c",
+        "postgresql.h": "c",
+        "base64.h": "c",
+        "stdint.h": "c",
+        "packet.h": "c",
+        "array": "c",
+        "string": "c",
+        "string_view": "c",
+        "rand.h": "c"
     }
 }

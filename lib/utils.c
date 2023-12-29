@@ -145,8 +145,8 @@ char* encrypt(const char *plaintext, const char *key, const unsigned char *iv) {
     return result;
 }
 
-
 char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) {
+    int MAX_TEXT_SIZE = 8192;
     const EVP_CIPHER *cipher = EVP_aes_256_cbc();
     const int key_len = EVP_CIPHER_key_length(cipher);
     const int iv_len = EVP_CIPHER_iv_length(cipher);
@@ -157,31 +157,24 @@ char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) 
     const unsigned char *ciphertext_data = (const unsigned char *)(ciphertext + iv_len);
     int ciphertext_len = strlen(ciphertext + iv_len);
 
-    unsigned char plaintext_block[BLOCK_SIZE + EVP_CIPHER_block_size(cipher)];
-
     int len;
     int final_len;
-    int total_len = 0;
-    int buffer_size = 1024;  // Initial buffer size, adjust as needed
+    int buffer_size = MAX_TEXT_SIZE + EVP_CIPHER_block_size(cipher);
     char *decrypted_text = (char *)malloc(buffer_size);
 
-    EVP_DecryptUpdate(ctx, plaintext_block, &len, ciphertext_data, ciphertext_len);
+    if (!decrypted_text) {
+        fprintf(stderr, "Memory allocation error.\n");
+        EVP_CIPHER_CTX_free(ctx);
+        return NULL;
+    }
+
+    EVP_DecryptUpdate(ctx, (unsigned char *)decrypted_text, &len, ciphertext_data, ciphertext_len);
     final_len = 0;
-    EVP_DecryptFinal_ex(ctx, plaintext_block + len, &final_len);
+    EVP_DecryptFinal_ex(ctx, (unsigned char *)decrypted_text + len, &final_len);
 
     len += final_len;
 
-    // Resize the buffer if needed
-    if (total_len + len > buffer_size) {
-        buffer_size *= 2;
-        decrypted_text = (char *)realloc(decrypted_text, buffer_size);
-    }
-
-    // Copy the decrypted block to the result buffer
-    memcpy(decrypted_text + total_len, plaintext_block, len);
-    total_len += len;
-
-    decrypted_text[total_len] = '\0';  // Null-terminate the string
+    decrypted_text[len] = '\0';  // Null-terminate the string
 
     EVP_CIPHER_CTX_free(ctx);
 
@@ -195,4 +188,52 @@ void generateRandomIV(char *iv, size_t ivSize) {
         fprintf(stderr, "Error generating random IV.\n");
         exit(EXIT_FAILURE);
     }
+}
+void handleErrors(void) {
+    fprintf(stderr, "Error in OpenSSL operation.\n");
+    exit(EXIT_FAILURE);
+}
+
+void encryptAES256(const unsigned char *plaintext, size_t plaintext_len, const unsigned char *key,
+                   const unsigned char *iv, unsigned char *ciphertext) {
+    EVP_CIPHER_CTX *ctx;
+
+    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
+
+    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+        handleErrors();
+
+    int len;
+    int ciphertext_len;
+
+    if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
+        handleErrors();
+    ciphertext_len = len;
+
+    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) handleErrors();
+    ciphertext_len += len;
+
+    EVP_CIPHER_CTX_free(ctx);
+}
+
+void decryptAES256(const unsigned char *ciphertext, size_t ciphertext_len, const unsigned char *key,
+                   const unsigned char *iv, unsigned char *plaintext) {
+    EVP_CIPHER_CTX *ctx;
+
+    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
+
+    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+        handleErrors();
+
+    int len;
+    int plaintext_len;
+
+    if (1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
+        handleErrors();
+    plaintext_len = len;
+
+    if (1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len)) handleErrors();
+    plaintext_len += len;
+
+    EVP_CIPHER_CTX_free(ctx);
 }

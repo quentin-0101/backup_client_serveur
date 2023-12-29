@@ -25,4 +25,10 @@ char* encrypt(const char *plaintext, const char *key, const unsigned char *iv) ;
 char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) ;
 void generateRandomIV(char *iv, size_t ivSize);
 
+void decryptAES256(const unsigned char *ciphertext, size_t ciphertext_len, const unsigned char *key,
+                   const unsigned char *iv, unsigned char *plaintext);
+void encryptAES256(const unsigned char *plaintext, size_t plaintext_len, const unsigned char *key,
+                   const unsigned char *iv, unsigned char *ciphertext);
+void handleErrors(void);
+
 #endif

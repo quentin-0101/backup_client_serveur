@@ -197,11 +197,33 @@ void handle_client(SSL *ssl) {
                   //  decryptData(crypted, strlen(crypted), decrypted, key);
                   //  printf("decrypted : %s\n", decrypted);
                     printf("use iv           :%s\n", iv);
-                    char *encrypted_data = encrypt(packetReceive.fileContent.content, authPacket.apiPacket.secret, iv);
-                    fwrite(encrypted_data, strlen(encrypted_data), 1, fichier);
+                   // char *encrypted_data = encryptAES256(packetReceive.fileContent.content, strlen(packetReceive.fileContent.content), authPacket.apiPacket.secret, iv);
+                  //  fwrite(encrypted_data, strlen(encrypted_data), 1, fichier);
 
-                    char *decrypted_content = decrypt(encrypted_data, authPacket.apiPacket.secret, iv);
-                    printf("decrypted : %s\n", decrypted_content);
+
+
+                    size_t plaintext_len = strlen(packetReceive.fileContent.content);
+
+                    // Allocate memory for ciphertext and IV
+                    size_t ciphertext_len = AES_BLOCK_SIZE * ((plaintext_len + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE);
+                    unsigned char *ciphertext = (unsigned char *)malloc(ciphertext_len);
+                    unsigned char iv[AES_BLOCK_SIZE];
+
+                    // Encrypt
+                    encryptAES256((unsigned char *)packetReceive.fileContent.content, plaintext_len, authPacket.apiPacket.secret, iv, ciphertext);
+                    fwrite(ciphertext, strlen(ciphertext), 1, fichier);
+
+                     // Decrypt
+                    unsigned char *decrypted_text = (unsigned char *)malloc(ciphertext_len);
+                    decryptAES256(ciphertext, ciphertext_len, authPacket.apiPacket.secret, iv, decrypted_text);
+
+                    // Print decrypted text
+                    printf("Decrypted Text: %s\n", decrypted_text);
+
+
+
+           //         char *decrypted_content = decryptAES256(encrypted_data, authPacket.apiPacket.secret, iv);
+           //         printf("decrypted : %s\n", decrypted_content);
                     break;
                 
                 case FINISH_FILE:
