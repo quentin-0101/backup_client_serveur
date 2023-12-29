@@ -7,6 +7,12 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <openssl/md5.h>
+#include <openssl/aes.h>
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
+
+#define BLOCK_SIZE 2048
 
 char* replace(const char *str, char last, char new);
 void deleteAfterLastSlash(char *chaine);
@@ -14,5 +20,9 @@ void createBackupDirectory();
 void writeToLog(const char *message);
 void generateRandomKey(char *apiKey, size_t length);
 char* calculateMD5(const char *filename);
+
+char* encrypt(const char *plaintext, const char *key, const unsigned char *iv) ;
+char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) ;
+void generateRandomIV(char *iv, size_t ivSize);
 
 #endif

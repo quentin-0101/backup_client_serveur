@@ -22,6 +22,7 @@ int createDatabase(PGconn *conn) {
                                "lastModification TEXT, "
                                "slug TEXT, "
                                "user_api TEXT, "
+                               "iv TEXT,"
                                "PRIMARY KEY (path, user_api), "
                                "FOREIGN KEY (user_api) REFERENCES users(api)"
                                ");";
@@ -68,7 +69,7 @@ const char *selectLastModificationFromFileByPath(PGconn *conn, const char *path,
 }
 
 
-int insertNewFile(PGconn *conn, Packet *packet, const char *user_api) {
+int insertNewFile(PGconn *conn, Packet *packet, const char *user_api, char *iv) {
     PGresult *result = PQexec(conn, "BEGIN TRANSACTION");
 
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
@@ -79,12 +80,14 @@ int insertNewFile(PGconn *conn, Packet *packet, const char *user_api) {
 
     PQclear(result);
 
-    const char *insert_sql = "INSERT INTO file (path, lastModification, slug, user_api) VALUES ($1, $2, $3, $4)";
-    const char *paramValues[4] = {packet->fileInfo.path, packet->fileInfo.lastModification, packet->fileInfo.slug, user_api};
-    const int paramLengths[4] = {-1, -1, -1, -1};
-    const int paramFormats[4] = {0, 0, 0, 0};
+    printf("postgre : %s\n", iv);
 
-    result = PQexecParams(conn, insert_sql, 4, NULL, paramValues, paramLengths, paramFormats, 0);
+    const char *insert_sql = "INSERT INTO file (path, lastModification, slug, user_api, iv) VALUES ($1, $2, $3, $4, $5)";
+    const char *paramValues[5] = {packet->fileInfo.path, packet->fileInfo.lastModification, packet->fileInfo.slug, user_api, iv};
+    const int paramLengths[5] = {-1, -1, -1, -1, -1};
+    const int paramFormats[5] = {0, 0, 0, 0, 0};
+
+    result = PQexecParams(conn, insert_sql, 5, NULL, paramValues, paramLengths, paramFormats, 0);
 
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
         fprintf(stderr, "Error executing INSERT statement: %s\n", PQerrorMessage(conn));
@@ -114,7 +117,7 @@ int insertNewFile(PGconn *conn, Packet *packet, const char *user_api) {
     return 0;
 }
 
-int updateFile(PGconn *conn, Packet *packet) {
+int updateFile(PGconn *conn, Packet *packet, char *iv) {
     printf("update : %s\n", packet->fileInfo.lastModification);
 
     PGresult *result = PQexec(conn, "BEGIN TRANSACTION");
@@ -127,12 +130,12 @@ int updateFile(PGconn *conn, Packet *packet) {
 
     PQclear(result);
 
-    const char *update_sql = "UPDATE file SET lastModification = $1 WHERE path = $2";
-    const char *paramValues[2] = {packet->fileInfo.lastModification, packet->fileInfo.path};
-    const int paramLengths[2] = {-1, -1};
-    const int paramFormats[2] = {0, 0};
+    const char *update_sql = "UPDATE file SET lastModification = $1, iv = $2 WHERE path = $3";
+    const char *paramValues[3] = {packet->fileInfo.lastModification, iv, packet->fileInfo.path};
+    const int paramLengths[3] = {-1, -1, -1};
+    const int paramFormats[3] = {0, 0, 0};
 
-    result = PQexecParams(conn, update_sql, 2, NULL, paramValues, paramLengths, paramFormats, 0);
+    result = PQexecParams(conn, update_sql, 3, NULL, paramValues, paramLengths, paramFormats, 0);
 
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
         fprintf(stderr, "Error executing UPDATE statement: %s\n", PQerrorMessage(conn));
@@ -408,6 +411,35 @@ int updateIPByAPI(PGconn *conn, const char *api, const char *newIP) {
     return 0;
 }
 
+
+
+char *getIVFromFile(PGconn *conn, const char *path, const char *user_api) {
+    const char *select_sql = "SELECT iv FROM file WHERE path = $1 AND user_api = $2";
+
+    const char *paramValues[2] = {path, user_api};
+    const int paramLengths[2] = {-1, -1};
+    const int paramFormats[2] = {0, 0};
+
+    PGresult *result = PQexecParams(conn, select_sql, 2, NULL, paramValues, paramLengths, paramFormats, 0);
+
+    if (PQresultStatus(result) != PGRES_TUPLES_OK) {
+        fprintf(stderr, "Error executing SELECT statement: %s\n", PQerrorMessage(conn));
+        PQclear(result);
+        return NULL;
+    }
+
+    if (PQntuples(result) > 0) {
+        char *iv = PQgetvalue(result, 0, 0);
+        PQclear(result);
+        return iv;
+    } else {
+        fprintf(stderr, "No results found for the specified path and user_api.\n");
+
+        PQclear(result);
+
+        return NULL;
+    }
+}
 
 /*
 int main() {

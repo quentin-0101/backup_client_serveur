@@ -13,7 +13,7 @@
 #include "lib/utils.h"
 #include "lib/readConfigFile.h"
 
-#include "lib/aes.h"
+#include "lib/base64.h"
 
 #define PORT 12347
 
@@ -84,6 +84,9 @@ void handle_client(SSL *ssl) {
     char savePath[1024];
     char hashReceivedCurrentFile[1024];
 
+    char iv[32];
+
+
     while (1) {
         // Recevoir un message du client
         Packet packetReceive;
@@ -150,18 +153,24 @@ void handle_client(SSL *ssl) {
                         printf("av\n");
                         const char *exist = selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
                         printf("ap\n");
+
+                        generateRandomIV(iv, 32);
+                        char *enc = b64_encode((const unsigned char *)iv, strlen(iv));
+                        printf("iv              :%s\n", iv);
+                        memset(packetReceive.fileInfo.iv, enc, strlen(enc) + 1);
+
                         if(exist == NULL){
                             generateRandomKey(packetReceive.fileInfo.slug, 32);
                             printf("insertion en base : \n");
                             printf("hash : %s\n", packetReceive.fileInfo.lastModification);
-                            insertNewFile(conn, &packetReceive, authPacket.apiPacket.api);
+                            insertNewFile(conn, &packetReceive, authPacket.apiPacket.api, enc);
                         } else {
                             char *slug = selectSlugByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
                             char fullPathServer[2048];
                             snprintf(fullPathServer, sizeof(fullPathServer), "server_data/%s", slug);
                             remove(fullPathServer);
                             memcpy(packetReceive.fileInfo.slug, slug, strlen(slug) + 1);
-                            updateFile(conn, &packetReceive);
+                            updateFile(conn, &packetReceive, enc);
                         }
                         memcpy(hashReceivedCurrentFile, packetReceive.fileInfo.lastModification, strlen(packetReceive.fileInfo.lastModification) + 1);
                     
@@ -187,9 +196,14 @@ void handle_client(SSL *ssl) {
                   //  char decrypted[2048];
                   //  decryptData(crypted, strlen(crypted), decrypted, key);
                   //  printf("decrypted : %s\n", decrypted);
+                    printf("use iv           :%s\n", iv);
+                    char *encrypted_data = encrypt(packetReceive.fileContent.content, authPacket.apiPacket.secret, iv);
+                    fwrite(encrypted_data, strlen(encrypted_data), 1, fichier);
 
-                    fwrite(packetReceive.fileContent.content, packetReceive.fileContent.size, 1, fichier);
+                    char *decrypted_content = decrypt(encrypted_data, authPacket.apiPacket.secret, iv);
+                    printf("decrypted : %s\n", decrypted_content);
                     break;
+                
                 case FINISH_FILE:
                     fclose(fichier);
                     printf("close file");
@@ -274,16 +288,39 @@ void handle_client(SSL *ssl) {
               //          generateKey(authPacket.apiPacket.secret, key);
                         writeToLog("send CONTENT_FILE start");
                         size_t octetsLus;
+
+                        char *iv_base64encode =  getIVFromFile(conn, packetResponse.fileInfo.path, authPacket.apiPacket.api);
+                        printf("iv database : %s\n", iv_base64encode);
+                       
+                       
+                        	/* +1 for the NULL terminator. */
+                        int out_len = b64_decoded_size(iv_base64encode)+1;
+                        char *out = malloc(out_len);
+                        
+
+
+                        if (!b64_decode(iv_base64encode, (unsigned char *)out, out_len)) {
+                        }
+                        out[out_len] = '\0';
+
+                        printf("decode iv        :%s\n", out);
+
+                
                         while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
-                //            char decrypted[2048];
+                            char crypted[2048];
                             for (size_t i = 0; i < octetsLus; i++) {
-                                packetResponse.fileContent.content[i] = buffer[i];
+                               // packetResponse.fileContent.content[i] = buffer[i];
+                               crypted[i] = buffer[i];
                             }
-                 //           decryptData(packetResponse.fileContent.content, strlen(packetResponse.fileContent.content), decrypted, key);
-                 //           printf("decrypted : %s\n", decrypted);
-                 //           memcpy(packetResponse.fileContent.content, decrypted, strlen(decrypted) + 1);
+               
                             packetResponse.flag = CONTENT_FILE;
                             packetResponse.fileContent.size = octetsLus;
+    
+                            strcpy(packetResponse.fileContent.content, decrypt(crypted, authPacket.apiPacket.secret, out));
+                            packetResponse.fileContent.size = strlen(packetResponse.fileContent.content);
+                            
+                            printf("decrypted : %s\n", packetResponse.fileContent.content);
+
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                             memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
                         //    writeToLog("send CONTENT_FILE");
