@@ -150,14 +150,14 @@ void handle_client(SSL *ssl) {
                    
                 //    generateRandomIV(packetReceive.fileInfo.iv, 16);
                     if(1 == 1){
-                        printf("av\n");
                         const char *exist = selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
-                        printf("ap\n");
-
                         generateRandomIV(iv, 32);
                         char *enc = b64_encode((const unsigned char *)iv, strlen(iv));
                         printf("iv              :%s\n", iv);
+                        printf("iv encoded      :%s\n", enc);
                         memset(packetReceive.fileInfo.iv, enc, strlen(enc) + 1);
+
+                        
 
                         if(exist == NULL){
                             generateRandomKey(packetReceive.fileInfo.slug, 32);
@@ -203,22 +203,26 @@ void handle_client(SSL *ssl) {
 
 
                     size_t plaintext_len = strlen(packetReceive.fileContent.content);
+                    printf("plaintext_len : %d\n", plaintext_len);
 
                     // Allocate memory for ciphertext and IV
                     size_t ciphertext_len = AES_BLOCK_SIZE * ((plaintext_len + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE);
+                    printf("ciphertext_len : %d\n", ciphertext_len);
                     unsigned char *ciphertext = (unsigned char *)malloc(ciphertext_len);
-                    unsigned char iv[AES_BLOCK_SIZE];
+                    printf("after malloc\n");
 
                     // Encrypt
                     encryptAES256((unsigned char *)packetReceive.fileContent.content, plaintext_len, authPacket.apiPacket.secret, iv, ciphertext);
                     fwrite(ciphertext, strlen(ciphertext), 1, fichier);
 
                      // Decrypt
-                    unsigned char *decrypted_text = (unsigned char *)malloc(ciphertext_len);
-                    decryptAES256(ciphertext, ciphertext_len, authPacket.apiPacket.secret, iv, decrypted_text);
+                  // unsigned char *decrypted_text = (unsigned char *)malloc(ciphertext_len);
+                  //  decryptAES256(ciphertext, ciphertext_len, authPacket.apiPacket.secret, iv, decrypted_text);
+
+                    
 
                     // Print decrypted text
-                    printf("Decrypted Text: %s\n", decrypted_text);
+                  //  printf("Decrypted Text: %s\n", decrypted_text);
 
 
 
@@ -245,6 +249,21 @@ void handle_client(SSL *ssl) {
                         writeToLog("error : file not completly received");
                     }
                     writeToLog(savePath);
+
+
+                    char *my_iv = getIVFromFile(conn, savePath, authPacket.apiPacket.api);
+                    int out_len = b64_decoded_size(my_iv)+1;
+                    char *out = malloc(out_len);
+                    b64_decode(my_iv, (unsigned char *)out, out_len);
+                    out[out_len] = '\0';
+                  printf("decode iv        :%s\n", out);
+
+                  //  decryptFileAES256(fullPathServer, authPacket.apiPacket.secret, out);
+                   
+                  //  printf("\niv encoded used : %s\n",  b64_encode(out, strlen(out)));
+                  //  printf("\niv used : %s\n",  out);
+                  //  printf("\nsecret used : %s\n", authPacket.apiPacket.secret);
+
 
                     break;
 
@@ -297,7 +316,7 @@ void handle_client(SSL *ssl) {
                             writeToLog("Erreur lors de l'ouverture du fichier");
                             perror("Erreur lors de l'ouverture du fichier");
                         }
-                        unsigned char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(unsigned char));
+                        char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(char));
 
                         if (buffer == NULL) {
                             writeToLog("Erreur d'allocation mémoire");
@@ -326,14 +345,16 @@ void handle_client(SSL *ssl) {
                         out[out_len] = '\0';
 
                         printf("decode iv        :%s\n", out);
+                        decryptFileAES256(filePath, authPacket.apiPacket.secret, out, ssl, packetResponse);
 
-                
+                /*
                         while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
                             char crypted[2048];
                             for (size_t i = 0; i < octetsLus; i++) {
                                // packetResponse.fileContent.content[i] = buffer[i];
                                crypted[i] = buffer[i];
                             }
+                            printf("----------------------------crypted : %s\n", crypted);
                
                             packetResponse.flag = CONTENT_FILE;
                             packetResponse.fileContent.size = octetsLus;
@@ -346,7 +367,7 @@ void handle_client(SSL *ssl) {
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                             memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
                         //    writeToLog("send CONTENT_FILE");
-                        }
+                        }*/
                         writeToLog("send CONTENT_FILE end");
 
                         free(buffer); // Libérer la mémoire du tampon
