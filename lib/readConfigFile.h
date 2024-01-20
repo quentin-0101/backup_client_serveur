@@ -29,6 +29,7 @@ typedef struct ConfigClient {
 
 int readDatabaseConfig(const char *filename, DatabaseConfig *config);
 const char* buildDatabaseConnectionString(const struct DatabaseConfig *config);
+int readClientCredentials(const char *filename, ApiPacket *apiPacket);
 
 int readConfigClientFile(const char *filename, ConfigClient *config);
 void freeConfigClient(ConfigClient *config);

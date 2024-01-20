@@ -327,9 +327,8 @@ void handle_client(SSL *ssl) {
                                 // End of the encrypted file
                                 break;
                             }
-
                             int size = decrypt(ciphertext, bytesRead, authPacket.apiPacket.secret, out, plaintext);
-                            memcpy(packetResponse.fileContent.content, plaintext, strlen(size) + 1);
+                            memcpy(packetResponse.fileContent.content, plaintext, size + 1);
                             packetResponse.fileContent.size = size;
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                         }

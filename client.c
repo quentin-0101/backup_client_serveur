@@ -45,7 +45,8 @@ void onPacketReceive(Packet packetReceive){
 
         case REQUEST_USER_API:
             if(1 == 1){
-                readConfigClientFile(".api", &configClient);
+                readClientCredentials(".api", &packetResponse.apiPacket);
+                
                 printf("API : %s\n", packetResponse.apiPacket.api);
                 printf("Secret : %s\n", packetResponse.apiPacket.secret);
 
