@@ -115,161 +115,113 @@ char* calculateMD5(const char *filename) {
 }
 
 
-
-void generateRandomIV(char *iv, size_t ivSize) {
-    if (RAND_bytes(iv, ivSize) != 1) {
-        fprintf(stderr, "Error generating random IV.\n");
-        exit(EXIT_FAILURE);
-    }
-}
 void handleErrors(void) {
     fprintf(stderr, "Error in OpenSSL operation.\n");
     exit(EXIT_FAILURE);
 }
 
 
-void decryptAES256(const unsigned char *ciphertext, size_t ciphertext_len, const unsigned char *key,
-                   const unsigned char *iv, char *plaintext) {
+// https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption   
+int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
+            unsigned char *iv, unsigned char *plaintext)
+{
     EVP_CIPHER_CTX *ctx;
 
-    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
-
-    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
-        handleErrors();
-
     int len;
+
     int plaintext_len;
 
-    if (1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
+    /* Create and initialise the context */
+    if(!(ctx = EVP_CIPHER_CTX_new()))
+        handleErrors();
+
+    /*
+     * Initialise the decryption operation. IMPORTANT - ensure you use a key
+     * and IV size appropriate for your cipher
+     * In this example we are using 256 bit AES (i.e. a 256 bit key). The
+     * IV size for *most* modes is the same as the block size. For AES this
+     * is 128 bits
+     */
+    if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+        handleErrors();
+
+    /*
+     * Provide the message to be decrypted, and obtain the plaintext output.
+     * EVP_DecryptUpdate can be called multiple times if necessary.
+     */
+    if(1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
         handleErrors();
     plaintext_len = len;
 
-    if (1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len)) handleErrors();
+    /*
+     * Finalise the decryption. Further plaintext bytes may be written at
+     * this stage.
+     */
+    if(1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len))
+        handleErrors();
     plaintext_len += len;
 
+    /* Clean up */
     EVP_CIPHER_CTX_free(ctx);
+
+    return plaintext_len;
 }
 
-void encryptAES256(const unsigned char *plaintext, size_t plaintext_len, const unsigned char *key,
-                   const unsigned char *iv, unsigned char *ciphertext) {
+
+
+void generateRandomIV(unsigned char *iv, size_t ivSize) {
+    if (RAND_bytes(iv, ivSize) != 1) {
+        fprintf(stderr, "Error generating random IV.\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+
+
+// https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
+int encryptAES(unsigned char *plaintext, int plaintext_len, unsigned char *key,
+            unsigned char *iv, unsigned char *ciphertext)
+{
     EVP_CIPHER_CTX *ctx;
 
-    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
-
-    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
-        handleErrors();
-
     int len;
+
     int ciphertext_len;
 
-    if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
+    /* Create and initialise the context */
+    if(!(ctx = EVP_CIPHER_CTX_new()))
+        handleErrors();
+
+    /*
+     * Initialise the encryption operation. IMPORTANT - ensure you use a key
+     * and IV size appropriate for your cipher
+     * In this example we are using 256 bit AES (i.e. a 256 bit key). The
+     * IV size for *most* modes is the same as the block size. For AES this
+     * is 128 bits
+     */
+    if(1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+        handleErrors();
+
+    /*
+     * Provide the message to be encrypted, and obtain the encrypted output.
+     * EVP_EncryptUpdate can be called multiple times if necessary
+     */
+    if(1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
         handleErrors();
     ciphertext_len = len;
 
-    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) handleErrors();
+    /*
+     * Finalise the encryption. Further ciphertext bytes may be written at
+     * this stage.
+     */
+    if(1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len))
+        handleErrors();
     ciphertext_len += len;
 
-    EVP_CIPHER_CTX_free(ctx);
-}
-
-char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv) {
-    int MAX_TEXT_SIZE = 8192;
-    const EVP_CIPHER *cipher = EVP_aes_256_cbc();
-    const int key_len = EVP_CIPHER_key_length(cipher);
-    const int iv_len = EVP_CIPHER_iv_length(cipher);
-
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    EVP_DecryptInit_ex(ctx, cipher, NULL, (unsigned char *)key, iv);
-
-    const unsigned char *ciphertext_data = (const unsigned char *)(ciphertext + iv_len);
-    int ciphertext_len = strlen(ciphertext + iv_len);
-
-    int len;
-    int final_len;
-    int buffer_size = MAX_TEXT_SIZE + EVP_CIPHER_block_size(cipher);
-    char *decrypted_text = (char *)malloc(buffer_size);
-
-    if (!decrypted_text) {
-        fprintf(stderr, "Memory allocation error.\n");
-        EVP_CIPHER_CTX_free(ctx);
-        return NULL;
-    }
-
-    EVP_DecryptUpdate(ctx, (unsigned char *)decrypted_text, &len, ciphertext_data, ciphertext_len);
-    final_len = 0;
-    EVP_DecryptFinal_ex(ctx, (unsigned char *)decrypted_text + len, &final_len);
-
-    len += final_len;
-
-    decrypted_text[len] = '\0';  // Null-terminate the string
-
+    /* Clean up */
     EVP_CIPHER_CTX_free(ctx);
 
-    return decrypted_text;
+    return ciphertext_len;
 }
 
-
-void decryptFileAES256(char *inputFile, unsigned char *key,
-                        char *iv, SSL *ssl, Packet packet) {
-     EVP_CIPHER_CTX *ctx;
-
-    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
-
-    FILE *input = fopen(inputFile, "rb");
-
-    if (!input) {
-        // Handle file opening errors
-        handleErrors();
-    }
-
-    int len;
-    size_t plaintext_len = 0;
-    unsigned char ciphertext[DECRYPT_MAX_SIZE];
-    unsigned char plaintext[DECRYPT_MAX_SIZE + EVP_CIPHER_block_size(EVP_aes_256_cbc())];
-
-    while (1) {
-        size_t bytesRead = fread(ciphertext, 1, DECRYPT_MAX_SIZE, input);
-        if (bytesRead <= 0) {
-            // End of the encrypted file
-            break;
-        }
-
-        if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
-            handleErrors();
-
-        if (1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, bytesRead))
-            handleErrors();
-
-        plaintext_len += len;
-
-        if (1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len)) {
-            // Handle errors, if necessary
-        }
-        plaintext_len += len;
-
-        // Reset the decrypted text size for the next loop iteration
-        plaintext_len = 0;
-    }
-
-    size_t stringLength = strlen(plaintext);
-    size_t currentPosition = 0;
-
-    while (currentPosition < stringLength) {
-        size_t currentBufferSize = (stringLength - currentPosition < BLOCK_SIZE)
-                                      ? (stringLength - currentPosition)
-                                      : BLOCK_SIZE;
-        printf("\ntext : %s\n", plaintext);
-        
-        memcpy(packet.fileContent.content, plaintext, currentBufferSize);
-        packet.fileContent.size = currentBufferSize;
-        packet.flag = CONTENT_FILE;
-        SSL_write(ssl, &packet , sizeof(packet));
-        
-
-        currentPosition += currentBufferSize;
-    }
-
-    printf("\n");
-    fclose(input);
-    EVP_CIPHER_CTX_free(ctx);
-}

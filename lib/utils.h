@@ -15,7 +15,11 @@
 #include "../objects/packet.h"
 
 #define BLOCK_SIZE 2048
-#define DECRYPT_MAX_SIZE 200000
+
+
+#define CHUNK_SIZE_PLAINTEXT 4096
+#define CHUNK_SIZE_CRYPTED 4112
+
 
 char* replace(const char *str, char last, char new);
 void deleteAfterLastSlash(char *chaine);
@@ -24,17 +28,9 @@ void writeToLog(const char *message);
 void generateRandomKey(char *apiKey, size_t length);
 char* calculateMD5(const char *filename);
 
-void generateRandomIV(char *iv, size_t ivSize);
-
-void decryptAES256(const unsigned char *ciphertext, size_t ciphertext_len, const unsigned char *key,
-                   const unsigned char *iv, char *plaintext);
-void encryptAES256(const unsigned char *plaintext, size_t plaintext_len, const unsigned char *key,
-                   const unsigned char *iv, unsigned char *ciphertext);
+void generateRandomIV(unsigned char *iv, size_t ivSize);
 void handleErrors(void);
+int encryptAES(unsigned char *plaintext, int plaintext_len, unsigned char *key, unsigned char *iv, unsigned char *ciphertext);
+int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key, unsigned char *iv, unsigned char *plaintext);
 
-void decryptFileAES256(char *inputFile, unsigned char *key,
-                        char *iv, SSL *ssl, Packet packet);
-
-
-char* decrypt(const char *ciphertext, const char *key, const unsigned char *iv);
 #endif

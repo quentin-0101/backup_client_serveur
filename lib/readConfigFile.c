@@ -11,6 +11,8 @@ int readDatabaseConfig(const char *filename, DatabaseConfig *config) {
     char key[MAX_LINE_LENGTH];
     char value[MAX_LINE_LENGTH];
 
+    printf("ok\n");
+
     while (fscanf(file, "%2047[^=]=%2047[^\n]\n", key, value) == 2) {
         if (strcmp(key, "HOST") == 0) {
             strcpy(config->host, value);

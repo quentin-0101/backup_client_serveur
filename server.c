@@ -13,6 +13,8 @@
 #include "lib/utils.h"
 #include "lib/readConfigFile.h"
 
+#include "lib/libbcrypt/bcrypt.h"
+
 #include "lib/base64.h"
 
 #define PORT 12347
@@ -46,7 +48,7 @@ void handle_client(SSL *ssl) {
         writeToLog("database connexion failed");
         writeToLog(PQerrorMessage(conn));
         PQfinish(conn);
-        return 1;
+       // return 1;
     }
     writeToLog("connected to the database");
 
@@ -190,44 +192,12 @@ void handle_client(SSL *ssl) {
                   //  char crypted[2048];
                   //  uint8_t key[32];
                   //  generateKey(authPacket.apiPacket.secret, key);
-                  //  encryptData(packetReceive.fileContent.content, packetReceive.fileContent.size, crypted, key);
-                  //  printf("encrypted data : %s\n", crypted);
-
-                  //  char decrypted[2048];
-                  //  decryptData(crypted, strlen(crypted), decrypted, key);
-                  //  printf("decrypted : %s\n", decrypted);
-                    printf("use iv           :%s\n", iv);
-                   // char *encrypted_data = encryptAES256(packetReceive.fileContent.content, strlen(packetReceive.fileContent.content), authPacket.apiPacket.secret, iv);
-                  //  fwrite(encrypted_data, strlen(encrypted_data), 1, fichier);
-
-
-
-                    size_t plaintext_len = strlen(packetReceive.fileContent.content);
-                    printf("plaintext_len : %d\n", plaintext_len);
-
-                    // Allocate memory for ciphertext and IV
-                    size_t ciphertext_len = AES_BLOCK_SIZE * ((plaintext_len + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE);
-                    printf("ciphertext_len : %d\n", ciphertext_len);
-                    unsigned char *ciphertext = (unsigned char *)malloc(ciphertext_len);
-                    printf("after malloc\n");
-
-                    // Encrypt
-                    encryptAES256((unsigned char *)packetReceive.fileContent.content, plaintext_len, authPacket.apiPacket.secret, iv, ciphertext);
-                    fwrite(ciphertext, strlen(ciphertext), 1, fichier);
-
-                     // Decrypt
-                  // unsigned char *decrypted_text = (unsigned char *)malloc(ciphertext_len);
-                  //  decryptAES256(ciphertext, ciphertext_len, authPacket.apiPacket.secret, iv, decrypted_text);
-
+                  if(1 == 1){
+                    unsigned char ciphertext[CHUNK_SIZE_CRYPTED];
+                    int size = encryptAES(packetReceive.fileContent.content, packetReceive.fileContent.size, authPacket.apiPacket.secret, iv, ciphertext);
+                    fwrite(ciphertext, 1, size, fichier);
+                  }
                     
-
-                    // Print decrypted text
-                  //  printf("Decrypted Text: %s\n", decrypted_text);
-
-
-
-           //         char *decrypted_content = decryptAES256(encrypted_data, authPacket.apiPacket.secret, iv);
-           //         printf("decrypted : %s\n", decrypted_content);
                     break;
                 
                 case FINISH_FILE:
@@ -239,6 +209,8 @@ void handle_client(SSL *ssl) {
                     char *slug = selectSlugByPath(conn, savePath, authPacket.apiPacket.api);
                     char fullPathServer[2048];
                     snprintf(fullPathServer, sizeof(fullPathServer), "server_data/%s", slug);
+
+                    /*
                     char *hash = calculateMD5(fullPathServer);
 
                     if(strcmp(hash, hashReceivedCurrentFile) == 0){
@@ -248,6 +220,8 @@ void handle_client(SSL *ssl) {
                         printf("il y a eu une erreur lors du trasnfert pour le fichier %s\n", savePath);
                         writeToLog("error : file not completly received");
                     }
+                    */
+                    writeToLog("the file received is complete");
                     writeToLog(savePath);
 
 
@@ -296,9 +270,6 @@ void handle_client(SSL *ssl) {
                         memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                         SSL_write(ssl, &packetResponse, sizeof(packetResponse));
 
-                        
-
-
                         writeToLog("send HEADER_FILE");
                         writeToLog(packetResponse.fileInfo.path);
 
@@ -316,17 +287,9 @@ void handle_client(SSL *ssl) {
                             writeToLog("Erreur lors de l'ouverture du fichier");
                             perror("Erreur lors de l'ouverture du fichier");
                         }
-                        char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(char));
 
-                        if (buffer == NULL) {
-                            writeToLog("Erreur d'allocation mémoire");
-                            perror("Erreur d'allocation mémoire");
-                            fclose(fichier);
-                        }
 
                     
-              //          uint8_t key[32];
-              //          generateKey(authPacket.apiPacket.secret, key);
                         writeToLog("send CONTENT_FILE start");
                         size_t octetsLus;
 
@@ -345,32 +308,34 @@ void handle_client(SSL *ssl) {
                         out[out_len] = '\0';
 
                         printf("decode iv        :%s\n", out);
-                        decryptFileAES256(filePath, authPacket.apiPacket.secret, out, ssl, packetResponse);
 
-                /*
-                        while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
-                            char crypted[2048];
-                            for (size_t i = 0; i < octetsLus; i++) {
-                               // packetResponse.fileContent.content[i] = buffer[i];
-                               crypted[i] = buffer[i];
+                        FILE *input = fopen(filePath, "rb");
+                         if (!input) {
+                            handleErrors();
+                        }
+
+                        int len;
+                        size_t plaintext_len = 0;
+                        unsigned char ciphertext[CHUNK_SIZE_CRYPTED];
+                        unsigned char plaintext[CHUNK_SIZE_PLAINTEXT];
+
+                        packetResponse.flag = CONTENT_FILE;
+
+                        while (1) {
+                            size_t bytesRead = fread(ciphertext, 1, CHUNK_SIZE_CRYPTED, input);
+                            if (bytesRead <= 0) {
+                                // End of the encrypted file
+                                break;
                             }
-                            printf("----------------------------crypted : %s\n", crypted);
-               
-                            packetResponse.flag = CONTENT_FILE;
-                            packetResponse.fileContent.size = octetsLus;
-    
-                            strcpy(packetResponse.fileContent.content, decrypt(crypted, authPacket.apiPacket.secret, out));
-                            packetResponse.fileContent.size = strlen(packetResponse.fileContent.content);
-                            
-                            printf("decrypted : %s\n", packetResponse.fileContent.content);
 
+                            int size = decrypt(ciphertext, bytesRead, authPacket.apiPacket.secret, out, plaintext);
+                            memcpy(packetResponse.fileContent.content, plaintext, strlen(size) + 1);
+                            packetResponse.fileContent.size = size;
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
-                            memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
-                        //    writeToLog("send CONTENT_FILE");
-                        }*/
+                        }
+                        
                         writeToLog("send CONTENT_FILE end");
 
-                        free(buffer); // Libérer la mémoire du tampon
                         fclose(fichier);
 
                         // envoi d'un flag pour signaler la fin du fichier

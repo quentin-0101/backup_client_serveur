@@ -1,10 +1,10 @@
 #ifndef FILECONTENT_H
 #define FILECONTENT_H
 
-#define SIZE_BLOCK_FILE 2048
+#define BLOCK_CONTENT_SIZE 4096
 
 typedef struct FileContent {
-    char content[2048];
+    char content[BLOCK_CONTENT_SIZE];
     int size;
 } __attribute__((packed)) FileContent;
 

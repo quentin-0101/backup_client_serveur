@@ -44,12 +44,14 @@ void onPacketReceive(Packet packetReceive){
     {
 
         case REQUEST_USER_API:
-            readClientCredentials(".api", &packetResponse.apiPacket);
-            printf("API : %s\n", packetResponse.apiPacket.api);
-            printf("Secret : %s\n", packetResponse.apiPacket.secret);
+            if(1 == 1){
+                readConfigClientFile(".api", &configClient);
+                printf("API : %s\n", packetResponse.apiPacket.api);
+                printf("Secret : %s\n", packetResponse.apiPacket.secret);
 
-            packetResponse.flag = API_RESPONSE;
-            SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+                packetResponse.flag = API_RESPONSE;
+                SSL_write(ssl, &packetResponse, sizeof(packetResponse));
+            }
             break;
 
         case AUTH_SUCCESS:
@@ -134,7 +136,7 @@ void onPacketReceive(Packet packetReceive){
                     perror("Erreur lors de l'ouverture du fichier");
                    // return 1;
                 }
-                unsigned char *buffer = (unsigned char *)malloc(SIZE_BLOCK_FILE * sizeof(unsigned char));
+                unsigned char *buffer = (unsigned char *)malloc(BLOCK_CONTENT_SIZE * sizeof(unsigned char));
 
                 if (buffer == NULL) {
                     perror("Erreur d'allocation mémoire");
@@ -143,14 +145,14 @@ void onPacketReceive(Packet packetReceive){
                 }
 
                 size_t octetsLus;
-                while ((octetsLus = fread(buffer, 1, SIZE_BLOCK_FILE, fichier)) > 0) {
+                while ((octetsLus = fread(buffer, 1, BLOCK_CONTENT_SIZE, fichier)) > 0) {
                     for (size_t i = 0; i < octetsLus; i++) {
                         packetResponse.fileContent.content[i] = buffer[i];
                     }
                     packetResponse.flag = CONTENT_FILE;
                     packetResponse.fileContent.size = octetsLus;
                     SSL_write(ssl, &packetResponse, sizeof(packetResponse));
-                    memset(packetResponse.fileContent.content, 0, SIZE_BLOCK_FILE);
+                    memset(packetResponse.fileContent.content, 0, BLOCK_CONTENT_SIZE);
                 }
 
                 free(buffer); // Libérer la mémoire du tampon
@@ -202,21 +204,24 @@ void onPacketReceive(Packet packetReceive){
                 break;
 
             case HEADER_FILE:
-                char dirpath[2048];
-                char command[4096];
-                memcpy(dirpath, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
-                deleteAfterLastSlash(dirpath);
+                if(1 == 1){
+                    char dirpath[2048];
+                    char command[4096];
+                    memcpy(dirpath, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
+                    deleteAfterLastSlash(dirpath);
+                    
+                    snprintf(command, sizeof(command), "mkdir -p %s", dirpath);
+
+                    system(command);
+                    printf("création de %s\n", dirpath);
+
+                    if (access(packetReceive.fileInfo.path, F_OK) != -1) { // si le fichier existe
+                        remove(packetReceive.fileInfo.path);
+                    }
                 
-                snprintf(command, sizeof(command), "mkdir -p %s", dirpath);
-
-                system(command);
-                printf("création de %s\n", dirpath);
-
-                if (access(packetReceive.fileInfo.path, F_OK) != -1) { // si le fichier existe
-                     remove(packetReceive.fileInfo.path);
+                    fichier = fopen(packetReceive.fileInfo.path, "wb");
                 }
                
-                fichier = fopen(packetReceive.fileInfo.path, "wb");
                 break;
             
             case CONTENT_FILE:
