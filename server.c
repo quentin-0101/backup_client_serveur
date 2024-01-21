@@ -138,6 +138,7 @@ void handle_client(SSL *ssl) {
                             packetResponse.flag = REQUEST_FILE;
                             memcpy(packetResponse.fileInfo.path, packetReceive.fileInfo.path, strlen(packetReceive.fileInfo.path) + 1);
                             writeToLog("REQUEST FILE");
+                            printf("REQUEST_FILE\n");
                             SSL_write(ssl, &packetResponse, sizeof(packetResponse));
                             
                         }
@@ -155,8 +156,8 @@ void handle_client(SSL *ssl) {
                         const char *exist = selectLastModificationFromFileByPath(conn, packetReceive.fileInfo.path, authPacket.apiPacket.api);
                         generateRandomIV(iv, 32);
                         char *enc = b64_encode((const unsigned char *)iv, strlen(iv));
-                        printf("iv              :%s\n", iv);
-                        printf("iv encoded      :%s\n", enc);
+                     //   printf("iv              :%s\n", iv);
+                     //   printf("iv encoded      :%s\n", enc);
                         memset(packetReceive.fileInfo.iv, enc, strlen(enc) + 1);
 
                         
@@ -230,7 +231,7 @@ void handle_client(SSL *ssl) {
                     char *out = malloc(out_len);
                     b64_decode(my_iv, (unsigned char *)out, out_len);
                     out[out_len] = '\0';
-                  printf("decode iv        :%s\n", out);
+             //     printf("decode iv        :%s\n", out);
 
                   //  decryptFileAES256(fullPathServer, authPacket.apiPacket.secret, out);
                    
@@ -294,7 +295,7 @@ void handle_client(SSL *ssl) {
                         size_t octetsLus;
 
                         char *iv_base64encode =  getIVFromFile(conn, packetResponse.fileInfo.path, authPacket.apiPacket.api);
-                        printf("iv database : %s\n", iv_base64encode);
+             //           printf("iv database : %s\n", iv_base64encode);
                        
                        
                         	/* +1 for the NULL terminator. */
@@ -307,7 +308,7 @@ void handle_client(SSL *ssl) {
                         }
                         out[out_len] = '\0';
 
-                        printf("decode iv        :%s\n", out);
+           //             printf("decode iv        :%s\n", out);
 
                         FILE *input = fopen(filePath, "rb");
                          if (!input) {

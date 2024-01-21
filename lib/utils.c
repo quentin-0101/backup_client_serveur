@@ -42,6 +42,7 @@ void createBackupDirectory() {
 }
 
 void writeToLog(const char *message) {
+    /*
     FILE *logFile;
     time_t currentTime;
     struct tm *timeInfo;
@@ -68,6 +69,7 @@ void writeToLog(const char *message) {
     fprintf(logFile, "%s%s\n", timestamp, message);
 
     fclose(logFile);
+    */
 }
 
 
@@ -81,7 +83,45 @@ void generateRandomKey(char *apiKey, size_t length) {
     }
 }
 
+void supprimerApresEspace(char *chaine) {
+    // Recherche du premier espace dans la chaîne
+    char *espace = strchr(chaine, ' ');
+
+    // Si un espace est trouvé, tronquer la chaîne à cet endroit
+    if (espace != NULL) {
+        *espace = '\0';
+    }
+}
+
 char* calculateMD5(const char *filename) {
+
+    char command[4096];  // ajustez la taille selon vos besoins
+    char resultBuffer[128];
+
+    // Construire la commande xxh128sum
+    snprintf(command, sizeof(command), "xxh128sum %s", filename);
+
+    // Ouvrir un flux de lecture sur la sortie de la commande
+    FILE* stream = popen(command, "r");
+    if (!stream) {
+        perror("Error opening stream");
+        return 1;
+    }
+
+    // Lire la sortie dans le tampon de résultat
+    if (fgets(resultBuffer, sizeof(resultBuffer), stream) == NULL) {
+        perror("Error reading from stream");
+        pclose(stream);
+        return 1;
+    }
+
+    // Fermer le flux
+    pclose(stream);
+
+    supprimerApresEspace(resultBuffer);
+    return resultBuffer;
+
+    /*
     int BUFFER_SIZE = 1024;
     FILE *file = fopen(filename, "rb");
     if (!file) {
@@ -112,6 +152,7 @@ char* calculateMD5(const char *filename) {
     }
 
     return md5sum;
+    */
 }
 
 

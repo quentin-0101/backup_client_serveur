@@ -26,6 +26,7 @@ void deleteAfterLastSlash(char *chaine);
 void createBackupDirectory();
 void writeToLog(const char *message);
 void generateRandomKey(char *apiKey, size_t length);
+void supprimerApresEspace(char *chaine);
 char* calculateMD5(const char *filename);
 
 void generateRandomIV(unsigned char *iv, size_t ivSize);
