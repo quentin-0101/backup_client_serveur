@@ -42,7 +42,7 @@ void createBackupDirectory() {
 }
 
 void writeToLog(const char *message) {
-    /*
+    
     FILE *logFile;
     time_t currentTime;
     struct tm *timeInfo;
@@ -69,7 +69,7 @@ void writeToLog(const char *message) {
     fprintf(logFile, "%s%s\n", timestamp, message);
 
     fclose(logFile);
-    */
+    
 }
 
 
