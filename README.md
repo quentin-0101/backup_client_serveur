@@ -47,3 +47,27 @@ lancer le client
 build/client extensions.conf
 
 ```
+
+
+```
+déploiement d'un service en production : fichier backup.service dans /etc/systemd/system
+[Unit]
+Description=backup_system
+Documentation=https://github.com/quentin-0101/backup_client_serveur
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/bin/bash -c 'cd /home/ubuntu/backup_client_serveur && sudo build/server'
+
+SyslogIdentifier=backup_system
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+```
